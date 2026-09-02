@@ -1,1 +1,0 @@
-import{a as e,o as t,t as n}from"./utils-CcsJ3qmZ.js";t();var r=e();function i({className:e,...t}){return(0,r.jsx)(`input`,{className:n(`flex h-11 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`,e),...t})}export{i as t};

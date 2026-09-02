@@ -1,1 +1,0 @@
-import{a as e,t}from"./utils-CcsJ3qmZ.js";var n=e();function r({className:e,...r}){return(0,n.jsx)(`span`,{className:t(`inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-muted-foreground`,e),...r})}export{r as t};

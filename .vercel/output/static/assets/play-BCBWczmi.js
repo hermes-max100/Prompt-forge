@@ -1,1 +1,0 @@
-import{i as e}from"./utils-CcsJ3qmZ.js";var t=e(`loader-circle`,[[`path`,{d:`M21 12a9 9 0 1 1-6.219-8.56`,key:`13zald`}]]),n=e(`play`,[[`polygon`,{points:`6 3 20 12 6 21 6 3`,key:`1oa8hb`}]]);export{t as n,n as t};

@@ -1,0 +1,6 @@
+{
+  "name": "PromptForge",
+  "description": "An Android toolkit to build, test, and evaluate AI prompts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
