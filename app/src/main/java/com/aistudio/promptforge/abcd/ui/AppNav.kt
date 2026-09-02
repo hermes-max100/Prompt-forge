@@ -3,11 +3,10 @@ package com.aistudio.promptforge.abcd.ui
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Science
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -19,31 +18,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.aistudio.promptforge.abcd.ui.screens.ComposeScreen
+import com.aistudio.promptforge.abcd.ui.screens.EditorScreen
 import com.aistudio.promptforge.abcd.ui.screens.EvalScreen
 import com.aistudio.promptforge.abcd.ui.screens.LibraryScreen
 import com.aistudio.promptforge.abcd.ui.screens.PlaygroundScreen
-import com.aistudio.promptforge.abcd.ui.screens.StackScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
+    object Editor : Screen("editor", "Editor", Icons.Filled.Edit)
     object Compose : Screen("compose", "Composer", Icons.Filled.Create)
     object Library : Screen("library", "Library", Icons.Filled.LibraryBooks)
     object Playground : Screen("playground", "Playground", Icons.Filled.PlayArrow)
     object Eval : Screen("eval", "Eval Lab", Icons.Filled.Science)
-    object Stack : Screen("stack", "Stack", Icons.Filled.Settings)
 }
 
 val items = listOf(
+    Screen.Editor,
     Screen.Compose,
     Screen.Library,
     Screen.Playground,
-    Screen.Eval,
-    Screen.Stack
+    Screen.Eval
 )
 
 @Composable
@@ -73,12 +71,12 @@ fun AppNavigation(viewModel: MainViewModel) {
             }
         }
     ) { innerPadding ->
-        NavHost(navController, startDestination = Screen.Compose.route, Modifier.padding(innerPadding)) {
+        NavHost(navController, startDestination = Screen.Editor.route, Modifier.padding(innerPadding)) {
+            composable(Screen.Editor.route) { EditorScreen(viewModel) }
             composable(Screen.Compose.route) { ComposeScreen(viewModel, navController) }
             composable(Screen.Library.route) { LibraryScreen(viewModel, navController) }
             composable(Screen.Playground.route) { PlaygroundScreen(viewModel) }
             composable(Screen.Eval.route) { EvalScreen(viewModel) }
-            composable(Screen.Stack.route) { StackScreen(navController) }
         }
     }
 }
