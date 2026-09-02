@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Promptforge",
+      "hasCanvas": false,
+      "bodyTextLen": 526,
+      "bodyTextHash": "ff4690386b7943775de35a1ede63cf9b0a1c137d212efdeec6a5a49f451e9d85",
+      "bodyTextPrefix": "Promptforge Prompt studio Compose Playground Eval Library Stack ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Promptforge",
+      "hasCanvas": false,
+      "bodyTextLen": 512,
+      "bodyTextHash": "1125885ced2b56a30e1539fc8fd6d5bc34927ec95418a361da579cafdbc28c21",
+      "bodyTextPrefix": "Promptforge COMPOSER Build a prompt that holds still Pick a fram",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
