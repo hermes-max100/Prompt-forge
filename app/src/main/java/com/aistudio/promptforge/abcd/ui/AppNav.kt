@@ -2,11 +2,11 @@ package com.aistudio.promptforge.abcd.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LibraryBooks
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -22,26 +22,26 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.aistudio.promptforge.abcd.ui.screens.ComposeScreen
-import com.aistudio.promptforge.abcd.ui.screens.EditorScreen
-import com.aistudio.promptforge.abcd.ui.screens.EvalScreen
-import com.aistudio.promptforge.abcd.ui.screens.LibraryScreen
-import com.aistudio.promptforge.abcd.ui.screens.PlaygroundScreen
+import com.aistudio.promptforge.abcd.ui.screens.EngineScreen
+import com.aistudio.promptforge.abcd.ui.screens.PluginForgeScreen
+import com.aistudio.promptforge.abcd.ui.screens.PromptForgeScreen
+import com.aistudio.promptforge.abcd.ui.screens.SkillForgeScreen
+import com.aistudio.promptforge.abcd.ui.screens.VaultScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
-    object Editor : Screen("editor", "Editor", Icons.Filled.Edit)
-    object Compose : Screen("compose", "Composer", Icons.Filled.Create)
-    object Library : Screen("library", "Library", Icons.Filled.LibraryBooks)
-    object Playground : Screen("playground", "Playground", Icons.Filled.PlayArrow)
-    object Eval : Screen("eval", "Eval Lab", Icons.Filled.Science)
+    object Engine : Screen("engine", "Auto Forge", Icons.Filled.FlashOn)
+    object PromptForge : Screen("prompt_forge", "Prompt Forge", Icons.Filled.Edit)
+    object SkillForge : Screen("skill_forge", "Skill Forge", Icons.Filled.Psychology)
+    object PluginForge : Screen("plugin_forge", "Plugin Forge", Icons.Filled.Extension)
+    object Vault : Screen("vault", "Vault", Icons.Filled.Inventory)
 }
 
-val items = listOf(
-    Screen.Editor,
-    Screen.Compose,
-    Screen.Library,
-    Screen.Playground,
-    Screen.Eval
+val navItems = listOf(
+    Screen.Engine,
+    Screen.PromptForge,
+    Screen.SkillForge,
+    Screen.PluginForge,
+    Screen.Vault
 )
 
 @Composable
@@ -52,10 +52,10 @@ fun AppNavigation(viewModel: MainViewModel) {
             NavigationBar {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
-                items.forEach { screen ->
+                navItems.forEach { screen ->
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = null) },
-                        label = { Text(screen.title) },
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title, maxLines = 1) },
                         selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                         onClick = {
                             navController.navigate(screen.route) {
@@ -71,12 +71,16 @@ fun AppNavigation(viewModel: MainViewModel) {
             }
         }
     ) { innerPadding ->
-        NavHost(navController, startDestination = Screen.Editor.route, Modifier.padding(innerPadding)) {
-            composable(Screen.Editor.route) { EditorScreen(viewModel) }
-            composable(Screen.Compose.route) { ComposeScreen(viewModel, navController) }
-            composable(Screen.Library.route) { LibraryScreen(viewModel, navController) }
-            composable(Screen.Playground.route) { PlaygroundScreen(viewModel) }
-            composable(Screen.Eval.route) { EvalScreen(viewModel) }
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Engine.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Screen.Engine.route) { EngineScreen(viewModel, navController) }
+            composable(Screen.PromptForge.route) { PromptForgeScreen(viewModel, navController) }
+            composable(Screen.SkillForge.route) { SkillForgeScreen(viewModel, navController) }
+            composable(Screen.PluginForge.route) { PluginForgeScreen(viewModel, navController) }
+            composable(Screen.Vault.route) { VaultScreen(viewModel, navController) }
         }
     }
 }

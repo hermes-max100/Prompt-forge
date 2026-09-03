@@ -17,5 +17,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "PromptForge"
+rootProject.name = "AutoForge"
 include(":app")

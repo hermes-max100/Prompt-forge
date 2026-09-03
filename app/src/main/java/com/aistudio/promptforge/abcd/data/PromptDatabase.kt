@@ -5,7 +5,18 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [SavedPrompt::class, PlaygroundRun::class, EvalCase::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        AutoForgePack::class,
+        SavedSkill::class,
+        SavedMcp::class,
+        SavedPrompt::class,
+        PlaygroundRun::class,
+        EvalCase::class
+    ],
+    version = 3,
+    exportSchema = false
+)
 abstract class PromptDatabase : RoomDatabase() {
     abstract fun promptDao(): PromptDao
 
@@ -15,7 +26,7 @@ abstract class PromptDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): PromptDatabase {
             return Instance ?: synchronized(this) {
-                Room.databaseBuilder(context, PromptDatabase::class.java, "prompt_database")
+                Room.databaseBuilder(context, PromptDatabase::class.java, "autoforge_database")
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { Instance = it }

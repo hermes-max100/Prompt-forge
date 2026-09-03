@@ -1,6 +1,7 @@
 {
-  "name": "PromptForge",
-  "description": "An Android toolkit to build, test, and evaluate AI prompts.",
+  "name": "AutoForge",
+  "description": "Autonomous Goal & Task Engine with Prompt Forge, Skill Forge, and Plugin Forge.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+
