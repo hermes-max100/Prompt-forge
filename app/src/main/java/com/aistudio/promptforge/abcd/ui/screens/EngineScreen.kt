@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PlayArrow
@@ -93,6 +94,7 @@ import com.aistudio.promptforge.abcd.model.GeneratedSkill
 import com.aistudio.promptforge.abcd.model.GoalPreset
 import com.aistudio.promptforge.abcd.ui.EngineStage
 import com.aistudio.promptforge.abcd.ui.MainViewModel
+import com.aistudio.promptforge.abcd.ui.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,6 +149,12 @@ fun EngineScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Screen.Vault.route) },
+                        modifier = Modifier.testTag("engine_open_vault_button")
+                    ) {
+                        Icon(Icons.Filled.Inventory, contentDescription = "Agent Vault")
+                    }
                     if (activePack != null) {
                         IconButton(
                             onClick = {

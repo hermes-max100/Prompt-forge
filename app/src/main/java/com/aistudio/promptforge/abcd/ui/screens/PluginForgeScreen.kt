@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.aistudio.promptforge.abcd.ui.MainViewModel
+import com.aistudio.promptforge.abcd.ui.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,6 +115,14 @@ fun PluginForgeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Screen.Vault.route) },
+                        modifier = Modifier.testTag("plugin_forge_open_vault_button")
+                    ) {
+                        Icon(Icons.Filled.Inventory, contentDescription = "Agent Vault")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

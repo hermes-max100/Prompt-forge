@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FindInPage
+import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Public
@@ -71,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.aistudio.promptforge.abcd.model.GeneratedSkill
 import com.aistudio.promptforge.abcd.ui.MainViewModel
+import com.aistudio.promptforge.abcd.ui.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +123,14 @@ fun SkillForgeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Screen.Vault.route) },
+                        modifier = Modifier.testTag("skill_forge_open_vault_button")
+                    ) {
+                        Icon(Icons.Filled.Inventory, contentDescription = "Agent Vault")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

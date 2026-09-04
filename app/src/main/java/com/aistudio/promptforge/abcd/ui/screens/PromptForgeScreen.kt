@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Speed
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.aistudio.promptforge.abcd.ui.MainViewModel
+import com.aistudio.promptforge.abcd.ui.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,6 +117,12 @@ fun PromptForgeScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Screen.Vault.route) },
+                        modifier = Modifier.testTag("prompt_forge_open_vault_button")
+                    ) {
+                        Icon(Icons.Filled.Inventory, contentDescription = "Agent Vault")
+                    }
                     if (promptResult.isNotBlank()) {
                         IconButton(
                             onClick = {
