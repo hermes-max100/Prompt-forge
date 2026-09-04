@@ -79,6 +79,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Security
 import com.aistudio.promptforge.abcd.data.AutoForgePack
 import com.aistudio.promptforge.abcd.data.SavedMcp
 import com.aistudio.promptforge.abcd.data.SavedPrompt
@@ -86,7 +91,14 @@ import com.aistudio.promptforge.abcd.data.SavedSkill
 import com.aistudio.promptforge.abcd.model.RepoPromptItem
 import com.aistudio.promptforge.abcd.ui.MainViewModel
 import com.aistudio.promptforge.abcd.ui.Screen
+import com.aistudio.promptforge.abcd.ui.components.DataPortabilityDialog
+import com.aistudio.promptforge.abcd.ui.components.ErrorBanner
+import com.aistudio.promptforge.abcd.ui.components.ExecutionProvenanceDialog
 import com.aistudio.promptforge.abcd.ui.components.InteractiveGeminiRunnerDialog
+import com.aistudio.promptforge.abcd.ui.components.PromptRevisionHistoryDialog
+import com.aistudio.promptforge.abcd.ui.components.ProviderSettingsDialog
+import com.aistudio.promptforge.abcd.ui.components.ThemeSelectorDialog
+import com.aistudio.promptforge.abcd.ui.theme.ThemeManager
 import com.aistudio.promptforge.abcd.util.ShareUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,6 +122,55 @@ fun VaultScreen(
 
     var packDetailToView by remember { mutableStateOf<AutoForgePack?>(null) }
     var runnerPromptItem by remember { mutableStateOf<RepoPromptItem?>(null) }
+
+    var showProviderSettings by remember { mutableStateOf(false) }
+    var showDataPortability by remember { mutableStateOf(false) }
+    var showProvenanceLogs by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+    var revisionPromptToView by remember { mutableStateOf<SavedPrompt?>(null) }
+
+    if (showThemeDialog) {
+        val tm = viewModel.themeManager ?: remember { ThemeManager(context) }
+        ThemeSelectorDialog(
+            themeManager = tm,
+            onDismiss = { showThemeDialog = false }
+        )
+    }
+
+    if (showProviderSettings) {
+        ProviderSettingsDialog(
+            viewModel = viewModel,
+            onDismiss = { showProviderSettings = false }
+        )
+    }
+
+    if (showDataPortability) {
+        DataPortabilityDialog(
+            viewModel = viewModel,
+            onDismiss = { showDataPortability = false }
+        )
+    }
+
+    if (showProvenanceLogs) {
+        ExecutionProvenanceDialog(
+            viewModel = viewModel,
+            onDismiss = { showProvenanceLogs = false }
+        )
+    }
+
+    if (revisionPromptToView != null) {
+        PromptRevisionHistoryDialog(
+            promptId = revisionPromptToView!!.id,
+            promptTitle = revisionPromptToView!!.title,
+            currentActiveText = revisionPromptToView!!.assembled,
+            viewModel = viewModel,
+            onRollbackApplied = { rolledBackText ->
+                viewModel.savePromptToVault(revisionPromptToView!!.title, rolledBackText)
+                revisionPromptToView = null
+            },
+            onDismiss = { revisionPromptToView = null }
+        )
+    }
 
     if (runnerPromptItem != null) {
         InteractiveGeminiRunnerDialog(
@@ -165,6 +226,46 @@ fun VaultScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = { showThemeDialog = true },
+                        modifier = Modifier.testTag("vault_open_theme_dialog_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.Palette,
+                            contentDescription = "Workspace Theme & Appearance",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(
+                        onClick = { showProviderSettings = true },
+                        modifier = Modifier.testTag("vault_open_provider_settings_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.Security,
+                            contentDescription = "AI Provider & Proxy Gateway",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(
+                        onClick = { showDataPortability = true },
+                        modifier = Modifier.testTag("vault_open_data_portability_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.FolderZip,
+                            contentDescription = "Data Portability & Factory Reset",
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    IconButton(
+                        onClick = { showProvenanceLogs = true },
+                        modifier = Modifier.testTag("vault_open_provenance_logs_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.Analytics,
+                            contentDescription = "Execution Provenance Traces",
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    IconButton(
                         onClick = { navController.navigate(Screen.PromptRepository.route) },
                         modifier = Modifier.testTag("vault_open_prompt_repository_button")
                     ) {
@@ -186,6 +287,22 @@ fun VaultScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            val currentError by viewModel.currentError.collectAsState()
+            if (currentError != null) {
+                ErrorBanner(
+                    error = currentError,
+                    onDismiss = { viewModel.clearError() },
+                    onRetry = { viewModel.retryLastAction() },
+                    onSwitchToLocal = {
+                        viewModel.repository.providerManager.setProviderType(com.aistudio.promptforge.abcd.api.provider.ProviderType.LOCAL_AUTONOMOUS)
+                        viewModel.clearError()
+                        Toast.makeText(context, "Switched to Autonomous Local Mode", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenSettings = { showProviderSettings = true },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
             val tabs = listOf(
                 "Goal Packs (${savedPacks.size})",
                 "Prompts (${savedPrompts.size})",
@@ -716,6 +833,21 @@ fun VaultScreen(
                                                 Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(12.dp))
                                                 Spacer(Modifier.width(3.dp))
                                                 Text("Share", fontSize = 11.sp)
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    revisionPromptToView = prompt
+                                                },
+                                                modifier = Modifier
+                                                    .weight(0.9f)
+                                                    .height(36.dp)
+                                                    .testTag("vault_revisions_btn_${prompt.id.take(8)}"),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Icon(Icons.Filled.History, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Versions", fontSize = 10.sp)
                                             }
 
                                             OutlinedButton(

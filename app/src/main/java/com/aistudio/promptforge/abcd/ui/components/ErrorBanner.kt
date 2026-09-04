@@ -23,10 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -57,6 +59,8 @@ fun ErrorBanner(
     error: AppError?,
     onDismiss: () -> Unit,
     onRetry: (() -> Unit)? = null,
+    onSwitchToLocal: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -223,13 +227,59 @@ fun ErrorBanner(
                             }
                         }
 
-                        // Action Buttons Row (Retry & Dismiss)
+                        // Action Buttons Row (Retry, Local Fallback, Settings, Dismiss)
                         Spacer(Modifier.height(8.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.End,
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            if (onSwitchToLocal != null) {
+                                OutlinedButton(
+                                    onClick = onSwitchToLocal,
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = contentColor
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, contentColor.copy(alpha = 0.4f)),
+                                    modifier = Modifier
+                                        .height(32.dp)
+                                        .testTag("error_switch_local_button")
+                                ) {
+                                    Icon(
+                                        Icons.Filled.FlashOn,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Autonomous Local", style = MaterialTheme.typography.labelMedium)
+                                }
+                                Spacer(Modifier.width(6.dp))
+                            }
+
+                            if (onOpenSettings != null) {
+                                OutlinedButton(
+                                    onClick = onOpenSettings,
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = contentColor
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, contentColor.copy(alpha = 0.4f)),
+                                    modifier = Modifier
+                                        .height(32.dp)
+                                        .testTag("error_settings_button")
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Tune,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Settings", style = MaterialTheme.typography.labelMedium)
+                                }
+                                Spacer(Modifier.width(6.dp))
+                            }
+
                             if (error.isRetryable && onRetry != null) {
                                 OutlinedButton(
                                     onClick = onRetry,

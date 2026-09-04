@@ -19,18 +19,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -47,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,6 +72,7 @@ import com.aistudio.promptforge.abcd.api.SupportedModels
 import com.aistudio.promptforge.abcd.model.RepoPromptItem
 import com.aistudio.promptforge.abcd.ui.MainViewModel
 import com.aistudio.promptforge.abcd.util.ShareUtils
+import com.aistudio.promptforge.abcd.util.VariableResolver
 
 @Composable
 fun InteractiveGeminiRunnerDialog(
@@ -87,7 +94,37 @@ fun InteractiveGeminiRunnerDialog(
     var selectedModel by remember { mutableStateOf(promptItem.recommendedModel) }
     var selectedTemperature by remember { mutableFloatStateOf(0.4f) }
 
+    var showRevisionHistory by remember { mutableStateOf(false) }
+    var showProvenanceDialog by remember { mutableStateOf(false) }
+
+    // Dynamic Variables
+    val detectedVariables = remember(activePromptText) {
+        VariableResolver.extractVariableNames(activePromptText)
+    }
+    val variableInputs = remember { mutableStateMapOf<String, String>() }
+
     val scrollState = rememberScrollState()
+
+    if (showRevisionHistory) {
+        PromptRevisionHistoryDialog(
+            promptId = promptItem.id,
+            promptTitle = promptItem.title,
+            currentActiveText = activePromptText,
+            viewModel = viewModel,
+            onRollbackApplied = { rolledBackText ->
+                activePromptText = rolledBackText
+            },
+            onDismiss = { showRevisionHistory = false }
+        )
+    }
+
+    if (showProvenanceDialog) {
+        ExecutionProvenanceDialog(
+            viewModel = viewModel,
+            promptIdFilter = promptItem.id,
+            onDismiss = { showProvenanceDialog = false }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = {
@@ -126,7 +163,7 @@ fun InteractiveGeminiRunnerDialog(
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(
-                            "Run with Gemini",
+                            "Run with AI Engine",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
@@ -138,6 +175,28 @@ fun InteractiveGeminiRunnerDialog(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { showRevisionHistory = true },
+                        modifier = Modifier.size(32.dp).testTag("dialog_revisions_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.History,
+                            contentDescription = "Revision History",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { showProvenanceDialog = true },
+                        modifier = Modifier.size(32.dp).testTag("dialog_provenance_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.Analytics,
+                            contentDescription = "Execution Provenance",
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                     IconButton(
                         onClick = { viewModel.toggleFavoritePrompt(promptItem.id) },
                         modifier = Modifier.size(32.dp).testTag("dialog_favorite_button")
@@ -180,7 +239,7 @@ fun InteractiveGeminiRunnerDialog(
             ) {
                 // Model Picker Chips
                 Text(
-                    "Gemini Model",
+                    "Model Selection",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -241,6 +300,39 @@ fun InteractiveGeminiRunnerDialog(
                     }
                 }
 
+                // Dynamic Variables Section (if detected in prompt template)
+                if (detectedVariables.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Template Variables (${detectedVariables.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            detectedVariables.forEach { varName ->
+                                OutlinedTextField(
+                                    value = variableInputs[varName] ?: "",
+                                    onValueChange = { variableInputs[varName] = it },
+                                    label = { Text(varName, fontSize = 11.sp) },
+                                    placeholder = { Text("Enter value for {{$varName}}", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp)
+                                        .testTag("var_input_$varName")
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(10.dp))
 
                 // Editable Prompt Body
@@ -269,11 +361,18 @@ fun InteractiveGeminiRunnerDialog(
                 // Execution Button
                 Button(
                     onClick = {
+                        val resolvedText = if (detectedVariables.isNotEmpty()) {
+                            VariableResolver.resolveTemplate(activePromptText, variableInputs)
+                        } else {
+                            activePromptText
+                        }
                         viewModel.executePromptWithGemini(
-                            promptText = activePromptText,
+                            promptText = resolvedText,
                             model = selectedModel,
                             temperature = selectedTemperature,
-                            promptId = promptItem.id
+                            promptId = promptItem.id,
+                            promptTitle = promptItem.title,
+                            appliedVariables = variableInputs.toMap()
                         )
                     },
                     enabled = !isBusy && activePromptText.isNotBlank(),
@@ -291,11 +390,11 @@ fun InteractiveGeminiRunnerDialog(
                             strokeWidth = 2.dp
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Executing with Gemini...", fontWeight = FontWeight.Bold)
+                        Text("Executing with AI...", fontWeight = FontWeight.Bold)
                     } else {
                         Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Execute Prompt with Gemini", fontWeight = FontWeight.Bold)
+                        Text("Execute Prompt", fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -345,7 +444,7 @@ fun InteractiveGeminiRunnerDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Gemini Response",
+                            "AI Response (Sanitized)",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
                         Row {
@@ -353,7 +452,7 @@ fun InteractiveGeminiRunnerDialog(
                                 onClick = {
                                     clipboardManager.setText(AnnotatedString(executionOutput))
                                     viewModel.recordPromptCopy(promptItem.id)
-                                    Toast.makeText(context, "Copied Gemini response!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Copied AI response!", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.size(32.dp).testTag("copy_gemini_response_button")
                             ) {
@@ -375,7 +474,7 @@ fun InteractiveGeminiRunnerDialog(
                             }
                             IconButton(
                                 onClick = {
-                                    viewModel.savePromptToVault("Gemini: " + promptItem.title.take(24), executionOutput)
+                                    viewModel.savePromptToVault("AI: " + promptItem.title.take(24), executionOutput)
                                     Toast.makeText(context, "Saved to Vault!", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.size(32.dp).testTag("save_gemini_response_button")

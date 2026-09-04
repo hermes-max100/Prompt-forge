@@ -101,3 +101,41 @@ data class PromptStat(
     val lastUsedAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "prompt_revisions")
+@Serializable
+data class PromptRevisionEntity(
+    @PrimaryKey val id: String,
+    val promptId: String,
+    val revisionNumber: Int,
+    val promptText: String,
+    val variablesJson: String = "[]",
+    val modelConfigJson: String = "{}",
+    val notes: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val isActive: Boolean = false
+)
+
+@Entity(tableName = "execution_provenance")
+@Serializable
+data class ExecutionProvenanceEntity(
+    @PrimaryKey val id: String,
+    val promptId: String,
+    val promptTitle: String,
+    val revisionId: String? = null,
+    val revisionNumber: Int? = null,
+    val resolvedVariablesJson: String = "{}",
+    val selectedModel: String,
+    val temperature: Float = 0.4f,
+    val maxTokens: Int = 1500,
+    val timestamp: Long = System.currentTimeMillis(),
+    val latencyMs: Long = 0,
+    val tokensPrompt: Int = 0,
+    val tokensOutput: Int = 0,
+    val totalTokens: Int = 0,
+    val tokenCostEstimateUsd: Double = 0.0,
+    val sanitizedOutput: String,
+    val rawOutput: String = "",
+    val status: String = "SUCCESS",
+    val errorReason: String? = null
+)
+

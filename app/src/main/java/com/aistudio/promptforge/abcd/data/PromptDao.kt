@@ -93,4 +93,39 @@ interface PromptDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdatePromptStat(stat: PromptStat)
+
+    // Prompt Revisions
+    @Query("SELECT * FROM prompt_revisions WHERE promptId = :promptId ORDER BY revisionNumber DESC")
+    fun getRevisionsForPrompt(promptId: String): Flow<List<PromptRevisionEntity>>
+
+    @Query("SELECT * FROM prompt_revisions WHERE promptId = :promptId AND isActive = 1 LIMIT 1")
+    suspend fun getActiveRevision(promptId: String): PromptRevisionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRevision(revision: PromptRevisionEntity)
+
+    @Query("UPDATE prompt_revisions SET isActive = 0 WHERE promptId = :promptId")
+    suspend fun deactivateAllRevisions(promptId: String)
+
+    @Query("UPDATE prompt_revisions SET isActive = 1 WHERE id = :revisionId")
+    suspend fun activateRevision(revisionId: String)
+
+    @Query("DELETE FROM prompt_revisions WHERE promptId = :promptId")
+    suspend fun deleteRevisionsForPrompt(promptId: String)
+
+    // Execution Provenance
+    @Query("SELECT * FROM execution_provenance ORDER BY timestamp DESC")
+    fun getAllExecutionProvenance(): Flow<List<ExecutionProvenanceEntity>>
+
+    @Query("SELECT * FROM execution_provenance WHERE promptId = :promptId ORDER BY timestamp DESC")
+    fun getProvenanceForPrompt(promptId: String): Flow<List<ExecutionProvenanceEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExecutionProvenance(provenance: ExecutionProvenanceEntity)
+
+    @Query("DELETE FROM execution_provenance")
+    suspend fun clearAllExecutionProvenance()
+
+    @Query("DELETE FROM execution_provenance WHERE id = :id")
+    suspend fun deleteExecutionProvenanceById(id: String)
 }

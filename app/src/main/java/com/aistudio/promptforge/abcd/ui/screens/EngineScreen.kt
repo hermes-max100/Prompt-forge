@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
@@ -98,6 +99,8 @@ import com.aistudio.promptforge.abcd.ui.MainViewModel
 import com.aistudio.promptforge.abcd.ui.Screen
 import com.aistudio.promptforge.abcd.ui.components.ApiDiagnosticsDialog
 import com.aistudio.promptforge.abcd.ui.components.ErrorBanner
+import com.aistudio.promptforge.abcd.ui.components.ThemeSelectorDialog
+import com.aistudio.promptforge.abcd.ui.theme.ThemeManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,11 +119,20 @@ fun EngineScreen(
     val clipboardManager = LocalClipboardManager.current
     var selectedInspectTab by remember { mutableIntStateOf(0) }
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
 
     if (showDiagnosticsDialog) {
         ApiDiagnosticsDialog(
             viewModel = viewModel,
             onDismiss = { showDiagnosticsDialog = false }
+        )
+    }
+
+    if (showThemeDialog) {
+        val tm = viewModel.themeManager ?: remember { ThemeManager(context) }
+        ThemeSelectorDialog(
+            themeManager = tm,
+            onDismiss = { showThemeDialog = false }
         )
     }
 
@@ -161,6 +173,16 @@ fun EngineScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { showThemeDialog = true },
+                        modifier = Modifier.testTag("engine_theme_selector_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.Palette,
+                            contentDescription = "Workspace Theme & Appearance",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(
                         onClick = { showDiagnosticsDialog = true },
                         modifier = Modifier.testTag("engine_api_diagnostics_button")

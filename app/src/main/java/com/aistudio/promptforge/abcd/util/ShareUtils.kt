@@ -6,15 +6,14 @@ import android.widget.Toast
 
 object ShareUtils {
     /**
-     * Launches the Android system share sheet with formatted prompt text.
+     * Pure formatting helper for prompt text sharing.
      */
-    fun sharePrompt(
-        context: Context,
+    fun formatPromptForShare(
         title: String,
         framework: String,
         promptText: String
-    ) {
-        val shareBody = buildString {
+    ): String {
+        return buildString {
             appendLine("=== $title ===")
             if (framework.isNotBlank()) {
                 appendLine("Framework: $framework")
@@ -24,7 +23,37 @@ object ShareUtils {
             appendLine()
             appendLine("--- Shared via AutoForge Prompt Repository ---")
         }
+    }
 
+    /**
+     * Pure formatting helper for AI response sharing.
+     */
+    fun formatResponseForShare(
+        promptTitle: String,
+        model: String,
+        response: String
+    ): String {
+        return buildString {
+            appendLine("=== Gemini AI Response ===")
+            appendLine("Prompt: $promptTitle")
+            appendLine("Model: $model")
+            appendLine()
+            appendLine(response.trim())
+            appendLine()
+            appendLine("--- Generated via AutoForge Gemini Runner ---")
+        }
+    }
+
+    /**
+     * Launches the Android system share sheet with formatted prompt text.
+     */
+    fun sharePrompt(
+        context: Context,
+        title: String,
+        framework: String,
+        promptText: String
+    ) {
+        val shareBody = formatPromptForShare(title, framework, promptText)
         shareText(context, subject = title, content = shareBody)
     }
 
@@ -37,16 +66,7 @@ object ShareUtils {
         model: String,
         response: String
     ) {
-        val shareBody = buildString {
-            appendLine("=== Gemini AI Response ===")
-            appendLine("Prompt: $promptTitle")
-            appendLine("Model: $model")
-            appendLine()
-            appendLine(response.trim())
-            appendLine()
-            appendLine("--- Generated via AutoForge Gemini Runner ---")
-        }
-
+        val shareBody = formatResponseForShare(promptTitle, model, response)
         shareText(context, subject = "Gemini Response: $promptTitle", content = shareBody)
     }
 

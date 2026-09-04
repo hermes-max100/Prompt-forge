@@ -11,10 +11,16 @@ import com.aistudio.promptforge.abcd.api.Part
 import com.aistudio.promptforge.abcd.api.PromptForgeApiService
 import com.aistudio.promptforge.abcd.api.RetrofitClient
 import com.aistudio.promptforge.abcd.api.SupportedModels
+import com.aistudio.promptforge.abcd.api.provider.GeminiDirectProvider
+import com.aistudio.promptforge.abcd.api.provider.ProviderManager
+import com.aistudio.promptforge.abcd.data.repository.PromptRevisionRepository
+import com.aistudio.promptforge.abcd.data.repository.ProvenanceRepository
+import com.aistudio.promptforge.abcd.data.repository.VaultDataRepository
 import com.aistudio.promptforge.abcd.model.AppError
 import com.aistudio.promptforge.abcd.model.AutoForgePackData
 import com.aistudio.promptforge.abcd.model.GeneratedMcp
 import com.aistudio.promptforge.abcd.model.GeneratedSkill
+import com.aistudio.promptforge.abcd.util.AiOutputValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -61,6 +67,12 @@ class PromptRepository(
     private val dao: PromptDao,
     val apiService: PromptForgeApiService = PromptForgeApiService()
 ) {
+    val revisionRepository = PromptRevisionRepository(dao)
+    val provenanceRepository = ProvenanceRepository(dao)
+    val vaultDataRepository = VaultDataRepository(dao, provenanceRepository)
+    val providerManager = ProviderManager(
+        geminiDirectProvider = GeminiDirectProvider(apiService)
+    )
 
     // AutoForge Packs
     fun getAutoForgePacks(): Flow<List<AutoForgePack>> = dao.getAllAutoForgePacks()
@@ -201,12 +213,13 @@ class PromptRepository(
             is ApiCallResult.Success -> {
                 val response = apiResult.data
                 val candidate = response.candidates?.firstOrNull()
-                val text = candidate?.content?.parts?.firstOrNull()?.text ?: ""
-                val outputWords = text.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }.size
-                val outputChars = text.length
+                val rawText = candidate?.content?.parts?.firstOrNull()?.text ?: ""
+                val sanitized = AiOutputValidator.sanitizeAndValidate(rawText).sanitizedText
+                val outputWords = sanitized.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }.size
+                val outputChars = sanitized.length
 
                 val promptTokens = response.usageMetadata?.promptTokenCount ?: estimateTokenCount(promptCombined)
-                val outputTokens = response.usageMetadata?.candidatesTokenCount ?: estimateTokenCount(text)
+                val outputTokens = response.usageMetadata?.candidatesTokenCount ?: estimateTokenCount(sanitized)
                 val totalTokens = response.usageMetadata?.totalTokenCount ?: (promptTokens + outputTokens)
                 val isEstimated = response.usageMetadata == null
 
@@ -221,7 +234,7 @@ class PromptRepository(
                     outputChars = outputChars,
                     outputWords = outputWords
                 )
-                AiResult.Success(text, metrics, isFallback = false)
+                AiResult.Success(sanitized, metrics, isFallback = false)
             }
             is ApiCallResult.Failure -> {
                 // Return fallback synthesis so the user is never blocked, but surface the AppError
