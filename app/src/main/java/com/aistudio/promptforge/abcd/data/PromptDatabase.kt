@@ -12,9 +12,11 @@ import androidx.room.RoomDatabase
         SavedMcp::class,
         SavedPrompt::class,
         PlaygroundRun::class,
-        EvalCase::class
+        EvalCase::class,
+        FavoritePrompt::class,
+        PromptStat::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class PromptDatabase : RoomDatabase() {

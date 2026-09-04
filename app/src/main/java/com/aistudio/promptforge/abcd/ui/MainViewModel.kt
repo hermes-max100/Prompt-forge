@@ -11,22 +11,28 @@ import com.aistudio.promptforge.abcd.data.AutoForgePack
 import com.aistudio.promptforge.abcd.data.GenerationMetrics
 import com.aistudio.promptforge.abcd.data.PlaygroundRun
 import com.aistudio.promptforge.abcd.data.PromptRepository
+import com.aistudio.promptforge.abcd.data.PromptStat
 import com.aistudio.promptforge.abcd.data.SavedMcp
 import com.aistudio.promptforge.abcd.data.SavedPrompt
 import com.aistudio.promptforge.abcd.data.SavedSkill
 import com.aistudio.promptforge.abcd.model.AppError
 import com.aistudio.promptforge.abcd.model.AutoForgePackData
+import com.aistudio.promptforge.abcd.model.CURATED_PROMPT_REPOSITORY
 import com.aistudio.promptforge.abcd.model.GOAL_PRESETS
 import com.aistudio.promptforge.abcd.model.GeneratedMcp
 import com.aistudio.promptforge.abcd.model.GeneratedSkill
 import com.aistudio.promptforge.abcd.model.GoalPreset
 import com.aistudio.promptforge.abcd.model.PRESET_MCPS_CATALOG
 import com.aistudio.promptforge.abcd.model.PRESET_SKILLS_CATALOG
+import com.aistudio.promptforge.abcd.model.PromptRepositoryCategories
+import com.aistudio.promptforge.abcd.model.RepoPromptItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -142,6 +148,99 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
     val isTestingApi: StateFlow<Boolean> = _isTestingApi.asStateFlow()
 
     val isApiKeyConfigured: Boolean get() = repository.isApiKeyConfigured()
+
+    private val _customApiKey = MutableStateFlow(repository.apiService.customApiKey)
+    val customApiKey: StateFlow<String> = _customApiKey.asStateFlow()
+
+    // ==========================================
+    // 7. PROMPT REPOSITORY & GEMINI EXECUTION
+    // ==========================================
+    private val _repoSearchQuery = MutableStateFlow("")
+    val repoSearchQuery: StateFlow<String> = _repoSearchQuery.asStateFlow()
+
+    private val _repoSelectedCategory = MutableStateFlow(PromptRepositoryCategories.ALL)
+    val repoSelectedCategory: StateFlow<String> = _repoSelectedCategory.asStateFlow()
+
+    private val _repoSelectedModelFilter = MutableStateFlow("All")
+    val repoSelectedModelFilter: StateFlow<String> = _repoSelectedModelFilter.asStateFlow()
+
+    val favoritePromptIds: StateFlow<Set<String>> = repository.getFavoritePromptIds()
+        .map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
+
+    val promptStatsMap: StateFlow<Map<String, PromptStat>> = repository.getAllPromptStats()
+        .map { list -> list.associateBy { it.promptId } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    // Interactive Gemini Prompt Runner State
+    private val _isExecutingPrompt = MutableStateFlow(false)
+    val isExecutingPrompt: StateFlow<Boolean> = _isExecutingPrompt.asStateFlow()
+
+    private val _promptExecutionOutput = MutableStateFlow("")
+    val promptExecutionOutput: StateFlow<String> = _promptExecutionOutput.asStateFlow()
+
+    private val _promptExecutionMetrics = MutableStateFlow<GenerationMetrics?>(null)
+    val promptExecutionMetrics: StateFlow<GenerationMetrics?> = _promptExecutionMetrics.asStateFlow()
+
+    private val _promptExecutionNotice = MutableStateFlow<AppError?>(null)
+    val promptExecutionNotice: StateFlow<AppError?> = _promptExecutionNotice.asStateFlow()
+
+    // Filtered Repository Prompts Flow combining curated + saved items with search and category filters
+    val filteredRepoPrompts: StateFlow<List<RepoPromptItem>> = combine(
+        savedPrompts,
+        _repoSearchQuery,
+        _repoSelectedCategory,
+        _repoSelectedModelFilter,
+        favoritePromptIds
+    ) { saved, query, category, modelFilter, favorites ->
+        val customItems = saved.map { sp ->
+            RepoPromptItem(
+                id = sp.id,
+                title = sp.title,
+                category = PromptRepositoryCategories.SAVED_CUSTOM,
+                framework = sp.frameworkId.ifBlank { "Custom" },
+                recommendedModel = SupportedModels.FLASH_LATEST,
+                description = "Saved custom prompt (${sp.assembled.take(60)}...)",
+                promptTemplate = sp.assembled,
+                tags = listOf("#saved", "#custom"),
+                isCustom = true,
+                isFavorite = favorites.contains(sp.id),
+                variables = emptyList()
+            )
+        }
+
+        val allItems = CURATED_PROMPT_REPOSITORY.map { item ->
+            item.copy(isFavorite = favorites.contains(item.id))
+        } + customItems
+
+        val cleanQuery = query.trim().lowercase()
+
+        allItems.filter { item ->
+            // Category filter
+            val matchesCategory = when (category) {
+                PromptRepositoryCategories.ALL -> true
+                PromptRepositoryCategories.SAVED_CUSTOM -> item.isCustom
+                "Favorites" -> item.isFavorite
+                else -> item.category.equals(category, ignoreCase = true)
+            }
+
+            // Model filter
+            val matchesModel = if (modelFilter == "All") true else item.recommendedModel == modelFilter
+
+            // Search query filter
+            val matchesSearch = if (cleanQuery.isBlank()) {
+                true
+            } else {
+                item.title.lowercase().contains(cleanQuery) ||
+                item.description.lowercase().contains(cleanQuery) ||
+                item.promptTemplate.lowercase().contains(cleanQuery) ||
+                item.framework.lowercase().contains(cleanQuery) ||
+                item.tags.any { it.lowercase().contains(cleanQuery) }
+            }
+
+            matchesCategory && matchesModel && matchesSearch
+        }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, CURATED_PROMPT_REPOSITORY)
 
     private var lastAction: (() -> Unit)? = null
 
@@ -506,6 +605,115 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
                     mcpJsonConfig = mcp.mcpJsonConfig,
                     serverCode = mcp.serverCode,
                     createdAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    // ------------------------------------------
+    // PROMPT REPOSITORY & GEMINI INTERACTIVE RUNNER
+    // ------------------------------------------
+    fun setRepoSearchQuery(query: String) {
+        _repoSearchQuery.value = query
+    }
+
+    fun setRepoSelectedCategory(category: String) {
+        _repoSelectedCategory.value = category
+    }
+
+    fun setRepoSelectedModelFilter(model: String) {
+        _repoSelectedModelFilter.value = model
+    }
+
+    fun updateCustomApiKey(key: String) {
+        _customApiKey.value = key
+        repository.setCustomApiKey(key)
+    }
+
+    fun executePromptWithGemini(
+        promptText: String,
+        systemInstruction: String? = null,
+        model: String = _selectedModel.value,
+        temperature: Float = 0.4f,
+        maxTokens: Int = 1500,
+        promptId: String? = null
+    ) {
+        if (promptText.isBlank()) return
+        _isExecutingPrompt.value = true
+        _promptExecutionOutput.value = ""
+        _promptExecutionMetrics.value = null
+        _promptExecutionNotice.value = null
+
+        viewModelScope.launch {
+            val result = repository.generateComplete(
+                system = systemInstruction,
+                user = promptText,
+                temperature = temperature,
+                maxTokens = maxTokens,
+                model = model
+            )
+
+            _isExecutingPrompt.value = false
+            when (result) {
+                is AiResult.Success -> {
+                    _promptExecutionOutput.value = result.data
+                    _promptExecutionMetrics.value = result.metrics
+                    if (result.notice != null) {
+                        _promptExecutionNotice.value = result.notice
+                    }
+                    if (promptId != null) {
+                        repository.recordPromptExecution(promptId, result.metrics.latencyMs)
+                    }
+                }
+                is AiResult.Error -> {
+                    _promptExecutionOutput.value = "Error executing prompt: ${result.message}"
+                    _promptExecutionNotice.value = result.appError ?: AppError.generic(result.message)
+                }
+            }
+        }
+    }
+
+    fun toggleFavoritePrompt(promptId: String) {
+        viewModelScope.launch {
+            repository.toggleFavorite(promptId)
+        }
+    }
+
+    fun recordPromptCopy(promptId: String) {
+        viewModelScope.launch {
+            repository.recordPromptCopy(promptId)
+        }
+    }
+
+    fun recordPromptShare(promptId: String) {
+        viewModelScope.launch {
+            repository.recordPromptShare(promptId)
+        }
+    }
+
+    fun clearPromptExecution() {
+        _promptExecutionOutput.value = ""
+        _promptExecutionMetrics.value = null
+        _promptExecutionNotice.value = null
+    }
+
+    fun createCustomRepoPrompt(
+        title: String,
+        category: String,
+        framework: String,
+        templateText: String
+    ) {
+        viewModelScope.launch {
+            repository.insertSavedPrompt(
+                SavedPrompt(
+                    id = UUID.randomUUID().toString(),
+                    title = title.ifBlank { "Custom Prompt: " + templateText.take(24) },
+                    frameworkId = framework.ifBlank { "Custom" },
+                    fieldsJson = "{}",
+                    assembled = templateText,
+                    system = "AutoForge Prompt Repository",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
                 )
             )
         }

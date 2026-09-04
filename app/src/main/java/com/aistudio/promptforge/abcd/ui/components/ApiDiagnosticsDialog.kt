@@ -22,7 +22,14 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -31,6 +38,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -57,6 +65,9 @@ fun ApiDiagnosticsDialog(
     onDismiss: () -> Unit
 ) {
     val isKeyConfigured = viewModel.isApiKeyConfigured
+    val customKeyVal by viewModel.customApiKey.collectAsState()
+    var inputKey by remember { mutableStateOf(customKeyVal) }
+    var showKeyText by remember { mutableStateOf(false) }
     val selectedModel by viewModel.selectedModel.collectAsState()
     val apiHealth by viewModel.apiHealthStatus.collectAsState()
     val isTesting by viewModel.isTestingApi.collectAsState()
@@ -132,6 +143,68 @@ fun ApiDiagnosticsDialog(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Custom API Key Input
+                Text(
+                    "Gemini API Key (Runtime Configuration)",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = inputKey,
+                    onValueChange = { inputKey = it },
+                    placeholder = { Text("Paste Gemini API Key (e.g. AIzaSy...)") },
+                    visualTransformation = if (showKeyText) VisualTransformation.None else PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("gemini_api_key_input"),
+                    shape = RoundedCornerShape(10.dp),
+                    trailingIcon = {
+                        IconButton(onClick = { showKeyText = !showKeyText }) {
+                            Icon(
+                                if (showKeyText) Icons.Filled.Key else Icons.Filled.Key,
+                                contentDescription = if (showKeyText) "Hide key" else "Show key",
+                                tint = if (showKeyText) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.updateCustomApiKey(inputKey)
+                            viewModel.testApiConnection()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("save_api_key_button"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Filled.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Apply & Test", fontSize = 12.sp)
+                    }
+                    if (inputKey.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                inputKey = ""
+                                viewModel.updateCustomApiKey("")
+                            },
+                            modifier = Modifier.testTag("clear_api_key_button"),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Clear", fontSize = 12.sp)
                         }
                     }
                 }

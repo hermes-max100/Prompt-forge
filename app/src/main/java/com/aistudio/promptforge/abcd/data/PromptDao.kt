@@ -42,6 +42,9 @@ interface PromptDao {
     @Query("SELECT * FROM saved_prompts ORDER BY createdAt DESC")
     fun getAllSavedPrompts(): Flow<List<SavedPrompt>>
 
+    @Query("SELECT * FROM saved_prompts WHERE title LIKE '%' || :query || '%' OR assembled LIKE '%' || :query || '%' OR frameworkId LIKE '%' || :query || '%' ORDER BY createdAt DESC")
+    fun searchSavedPrompts(query: String): Flow<List<SavedPrompt>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSavedPrompt(prompt: SavedPrompt)
 
@@ -67,4 +70,27 @@ interface PromptDao {
 
     @Query("DELETE FROM eval_cases WHERE id = :id")
     suspend fun deleteEvalCase(id: String)
+
+    // Favorite Prompts
+    @Query("SELECT promptId FROM favorite_prompts")
+    fun getAllFavoritePromptIds(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFavorite(favorite: FavoritePrompt)
+
+    @Query("DELETE FROM favorite_prompts WHERE promptId = :promptId")
+    suspend fun deleteFavorite(promptId: String)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM favorite_prompts WHERE promptId = :promptId)")
+    suspend fun isFavorite(promptId: String): Boolean
+
+    // Prompt Statistics
+    @Query("SELECT * FROM prompt_stats")
+    fun getAllPromptStats(): Flow<List<PromptStat>>
+
+    @Query("SELECT * FROM prompt_stats WHERE promptId = :promptId")
+    suspend fun getPromptStat(promptId: String): PromptStat?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdatePromptStat(stat: PromptStat)
 }

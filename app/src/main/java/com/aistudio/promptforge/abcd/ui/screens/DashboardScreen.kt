@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.NetworkCheck
@@ -673,6 +674,24 @@ fun DashboardScreen(
                     testTagCard = "dashboard_plugin_card",
                     testTagButton = "dashboard_card_launch_plugin_forge",
                     onClick = { navController.navigate(Screen.PluginForge.route) }
+                )
+            }
+
+            // --- 3E. 'PROMPT REPOSITORY' CARD ---
+            item {
+                EngineDetailCard(
+                    title = "Prompt Repository",
+                    badge = "PROMPT REPOSITORY & SEARCH",
+                    tagline = "Curated Library & Full-Text Keyword Search",
+                    description = "Browse, search, and run 18+ battle-tested prompt templates across Autonomous Agents, Clean Architecture, Reasoning CoT, and FastMCP. Run interactive tests with Gemini, and copy prompts with 1 tap.",
+                    capabilities = listOf("Instant Keyword Search", "Category Filters", "Direct Gemini Runner", "1-Tap Copy & Vault"),
+                    icon = Icons.Filled.Folder,
+                    iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    iconTint = MaterialTheme.colorScheme.secondary,
+                    buttonText = "Explore Prompt Repository",
+                    testTagCard = "dashboard_prompt_repo_card",
+                    testTagButton = "dashboard_card_launch_prompt_repo",
+                    onClick = { navController.navigate(Screen.PromptRepository.route) }
                 )
             }
 

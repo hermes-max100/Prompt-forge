@@ -82,3 +82,22 @@ data class EvalCase(
     val input: String,
     val expected: String
 )
+
+@Entity(tableName = "favorite_prompts")
+@Serializable
+data class FavoritePrompt(
+    @PrimaryKey val promptId: String,
+    val favoritedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "prompt_stats")
+@Serializable
+data class PromptStat(
+    @PrimaryKey val promptId: String,
+    val executionCount: Int = 0,
+    val copyCount: Int = 0,
+    val shareCount: Int = 0,
+    val lastLatencyMs: Long = 0,
+    val lastUsedAt: Long = System.currentTimeMillis()
+)
+

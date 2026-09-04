@@ -2,6 +2,7 @@ package com.aistudio.promptforge.abcd.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
@@ -28,13 +29,15 @@ import com.aistudio.promptforge.abcd.ui.screens.DashboardScreen
 import com.aistudio.promptforge.abcd.ui.screens.EngineScreen
 import com.aistudio.promptforge.abcd.ui.screens.PluginForgeScreen
 import com.aistudio.promptforge.abcd.ui.screens.PromptForgeScreen
+import com.aistudio.promptforge.abcd.ui.screens.PromptRepositoryScreen
 import com.aistudio.promptforge.abcd.ui.screens.SkillForgeScreen
 import com.aistudio.promptforge.abcd.ui.screens.VaultScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Filled.Dashboard)
-    object Engine : Screen("engine", "Auto Forge", Icons.Filled.FlashOn)
+    object PromptRepository : Screen("prompt_repository", "Repo", Icons.Filled.AutoAwesome)
     object PromptForge : Screen("prompt_forge", "Prompt Forge", Icons.Filled.Edit)
+    object Engine : Screen("engine", "Auto Forge", Icons.Filled.FlashOn)
     object SkillForge : Screen("skill_forge", "Skill Forge", Icons.Filled.Psychology)
     object PluginForge : Screen("plugin_forge", "Plugin Forge", Icons.Filled.Extension)
     object Vault : Screen("vault", "Vault", Icons.Filled.Inventory)
@@ -42,10 +45,10 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 
 val navItems = listOf(
     Screen.Dashboard,
-    Screen.Engine,
+    Screen.PromptRepository,
     Screen.PromptForge,
-    Screen.SkillForge,
-    Screen.PluginForge
+    Screen.Engine,
+    Screen.Vault
 )
 
 @Composable
@@ -84,6 +87,7 @@ fun AppNavigation(viewModel: MainViewModel) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Dashboard.route) { DashboardScreen(viewModel, navController) }
+            composable(Screen.PromptRepository.route) { PromptRepositoryScreen(viewModel, navController) }
             composable(Screen.Engine.route) { EngineScreen(viewModel, navController) }
             composable(Screen.PromptForge.route) { PromptForgeScreen(viewModel, navController) }
             composable(Screen.SkillForge.route) { SkillForgeScreen(viewModel, navController) }

@@ -2,6 +2,7 @@ package com.aistudio.promptforge.abcd.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,23 +22,30 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -74,7 +83,11 @@ import com.aistudio.promptforge.abcd.data.AutoForgePack
 import com.aistudio.promptforge.abcd.data.SavedMcp
 import com.aistudio.promptforge.abcd.data.SavedPrompt
 import com.aistudio.promptforge.abcd.data.SavedSkill
+import com.aistudio.promptforge.abcd.model.RepoPromptItem
 import com.aistudio.promptforge.abcd.ui.MainViewModel
+import com.aistudio.promptforge.abcd.ui.Screen
+import com.aistudio.promptforge.abcd.ui.components.InteractiveGeminiRunnerDialog
+import com.aistudio.promptforge.abcd.util.ShareUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,6 +99,8 @@ fun VaultScreen(
     val savedSkills by viewModel.savedSkills.collectAsState()
     val savedMcps by viewModel.savedMcps.collectAsState()
     val savedPrompts by viewModel.savedPrompts.collectAsState()
+    val favoriteIds by viewModel.favoritePromptIds.collectAsState()
+    val statsMap by viewModel.promptStatsMap.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Goal Packs, 1: Prompts, 2: Skills, 3: MCPs
     var searchQuery by remember { mutableStateOf("") }
@@ -94,6 +109,15 @@ fun VaultScreen(
     val clipboardManager = LocalClipboardManager.current
 
     var packDetailToView by remember { mutableStateOf<AutoForgePack?>(null) }
+    var runnerPromptItem by remember { mutableStateOf<RepoPromptItem?>(null) }
+
+    if (runnerPromptItem != null) {
+        InteractiveGeminiRunnerDialog(
+            promptItem = runnerPromptItem!!,
+            viewModel = viewModel,
+            onDismiss = { runnerPromptItem = null }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -137,6 +161,18 @@ fun VaultScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Screen.PromptRepository.route) },
+                        modifier = Modifier.testTag("vault_open_prompt_repository_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = "Open Prompt Repository",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -363,14 +399,114 @@ fun VaultScreen(
                         }
                     }
                     1 -> { // Prompts
+                        // Prompt Repository Link Banner
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                                    .clickable { navController.navigate(Screen.PromptRepository.route) }
+                                    .testTag("vault_open_repo_banner")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Icon(
+                                            Icons.Filled.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                "Explore Curated Prompt Repository",
+                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                            )
+                                            Text(
+                                                "18+ battle-tested prompts with search, filters & Gemini runner",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Category Chips including Favorites
+                        item {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                item {
+                                    val isFavSelected = selectedCategory == "Favorites"
+                                    val favCount = savedPrompts.count { favoriteIds.contains(it.id) }
+                                    FilterChip(
+                                        selected = isFavSelected,
+                                        onClick = {
+                                            selectedCategory = if (isFavSelected) "All" else "Favorites"
+                                        },
+                                        label = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    if (isFavSelected) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                                    contentDescription = null,
+                                                    tint = if (isFavSelected) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(
+                                                    if (favCount > 0) "Favorites ($favCount)" else "Favorites",
+                                                    fontSize = 12.sp
+                                                )
+                                            }
+                                        },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFFEF4444).copy(alpha = 0.16f),
+                                            selectedLabelColor = Color(0xFFEF4444)
+                                        ),
+                                        modifier = Modifier.testTag("vault_filter_favorites")
+                                    )
+                                }
+
+                                listOf("All", "RTF", "CREATE", "CARE", "TAG").forEach { cat ->
+                                    val isSelected = selectedCategory == cat
+                                    item {
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = { selectedCategory = cat },
+                                            label = { Text(cat, fontSize = 12.sp) },
+                                            modifier = Modifier.testTag("vault_filter_${cat.lowercase()}")
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         val filteredPrompts = savedPrompts.filter { prompt ->
                             val matchesSearch = searchQuery.isBlank() ||
                                 prompt.title.contains(searchQuery, ignoreCase = true) ||
                                 prompt.assembled.contains(searchQuery, ignoreCase = true) ||
                                 prompt.frameworkId.contains(searchQuery, ignoreCase = true)
-                            val matchesCat = selectedCategory == "All" ||
-                                prompt.frameworkId.contains(selectedCategory, ignoreCase = true) ||
-                                prompt.title.contains(selectedCategory, ignoreCase = true)
+                            val matchesCat = when (selectedCategory) {
+                                "All" -> true
+                                "Favorites" -> favoriteIds.contains(prompt.id)
+                                else -> prompt.frameworkId.contains(selectedCategory, ignoreCase = true) ||
+                                        prompt.title.contains(selectedCategory, ignoreCase = true)
+                            }
                             matchesSearch && matchesCat
                         }
 
@@ -378,13 +514,22 @@ fun VaultScreen(
                             item {
                                 EmptyVaultPlaceholder(
                                     title = if (searchQuery.isNotBlank() || selectedCategory != "All") "No Matching Prompts" else "No Saved Prompts",
-                                    subtitle = if (searchQuery.isNotBlank() || selectedCategory != "All") "Try adjusting your search query or framework category." else "Forge 10/10 prompts in Prompt Forge and save them here."
+                                    subtitle = if (searchQuery.isNotBlank() || selectedCategory != "All") "Try adjusting your search query or category filter." else "Forge 10/10 prompts in Prompt Forge and save them here."
                                 )
                             }
                         } else {
                             items(filteredPrompts) { prompt ->
+                                val isFavorite = favoriteIds.contains(prompt.id)
+                                val stat = statsMap[prompt.id]
+                                val wordCount = remember(prompt.assembled) {
+                                    prompt.assembled.split("\\s+".toRegex()).count { it.isNotBlank() }
+                                }
+                                val tokenEst = remember(prompt.assembled) {
+                                    (prompt.assembled.length / 4.0).toInt().coerceAtLeast(1)
+                                }
+
                                 Card(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().testTag("vault_prompt_card_${prompt.id.take(8)}"),
                                     shape = RoundedCornerShape(12.dp),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                                 ) {
@@ -410,27 +555,185 @@ fun VaultScreen(
                                                     )
                                                 }
                                             }
-                                            Row {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                // Favorite button
+                                                IconButton(
+                                                    onClick = { viewModel.toggleFavoritePrompt(prompt.id) },
+                                                    modifier = Modifier.size(32.dp).testTag("vault_fav_${prompt.id.take(8)}")
+                                                ) {
+                                                    Icon(
+                                                        if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                                        contentDescription = if (isFavorite) "Favorited" else "Favorite",
+                                                        tint = if (isFavorite) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+
+                                                // Share button
+                                                IconButton(
+                                                    onClick = {
+                                                        ShareUtils.sharePrompt(
+                                                            context = context,
+                                                            title = prompt.title,
+                                                            framework = prompt.frameworkId,
+                                                            promptText = prompt.assembled
+                                                        )
+                                                        viewModel.recordPromptShare(prompt.id)
+                                                    },
+                                                    modifier = Modifier.size(32.dp).testTag("vault_share_${prompt.id.take(8)}")
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Share,
+                                                        contentDescription = "Share Prompt",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+
+                                                // Copy button
                                                 IconButton(
                                                     onClick = {
                                                         clipboardManager.setText(AnnotatedString(prompt.assembled))
+                                                        viewModel.recordPromptCopy(prompt.id)
                                                         Toast.makeText(context, "Prompt copied to clipboard!", Toast.LENGTH_SHORT).show()
                                                     },
-                                                    modifier = Modifier.testTag("vault_copy_prompt_button")
+                                                    modifier = Modifier.size(32.dp).testTag("vault_copy_prompt_button")
                                                 ) {
-                                                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
+                                                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp))
                                                 }
-                                                IconButton(onClick = { viewModel.deleteSavedPrompt(prompt.id) }) {
-                                                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+
+                                                // Delete button
+                                                IconButton(
+                                                    onClick = { viewModel.deleteSavedPrompt(prompt.id) },
+                                                    modifier = Modifier.size(32.dp).testTag("vault_delete_${prompt.id.take(8)}")
+                                                ) {
+                                                    Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                                                 }
                                             }
                                         }
+
+                                        Spacer(Modifier.height(6.dp))
+
+                                        // Prompt Statistics & Token estimate
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "~$tokenEst tokens • $wordCount words",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            if (stat != null && (stat.executionCount > 0 || stat.copyCount > 0 || stat.shareCount > 0)) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
+                                                ) {
+                                                    Text(
+                                                        text = "${stat.executionCount} runs • ${stat.copyCount} copies • ${stat.shareCount} shares",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium, fontSize = 10.sp),
+                                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(6.dp))
                                         Text(
                                             prompt.assembled,
                                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
                                             maxLines = 3,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+
+                                        Spacer(Modifier.height(10.dp))
+
+                                        // Action buttons
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    runnerPromptItem = RepoPromptItem(
+                                                        id = prompt.id,
+                                                        title = prompt.title,
+                                                        category = "Saved Prompts",
+                                                        framework = prompt.frameworkId,
+                                                        description = "Custom saved prompt from Vault",
+                                                        promptTemplate = prompt.assembled,
+                                                        isCustom = true
+                                                    )
+                                                },
+                                                modifier = Modifier
+                                                    .weight(1.2f)
+                                                    .height(36.dp)
+                                                    .testTag("vault_run_gemini_${prompt.id.take(8)}"),
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                            ) {
+                                                Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Run Gemini", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    clipboardManager.setText(AnnotatedString(prompt.assembled))
+                                                    viewModel.recordPromptCopy(prompt.id)
+                                                    Toast.makeText(context, "Copied prompt!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier
+                                                    .weight(0.9f)
+                                                    .height(36.dp)
+                                                    .testTag("vault_copy_btn_${prompt.id.take(8)}"),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Icon(Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Copy", fontSize = 11.sp)
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    ShareUtils.sharePrompt(
+                                                        context = context,
+                                                        title = prompt.title,
+                                                        framework = prompt.frameworkId,
+                                                        promptText = prompt.assembled
+                                                    )
+                                                    viewModel.recordPromptShare(prompt.id)
+                                                },
+                                                modifier = Modifier
+                                                    .weight(0.9f)
+                                                    .height(36.dp)
+                                                    .testTag("vault_share_btn_${prompt.id.take(8)}"),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Share", fontSize = 11.sp)
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    viewModel.loadSavedPromptIntoForge(prompt)
+                                                    navController.navigate(Screen.PromptForge.route)
+                                                },
+                                                modifier = Modifier
+                                                    .weight(0.9f)
+                                                    .height(36.dp)
+                                                    .testTag("vault_forge_btn_${prompt.id.take(8)}"),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Forge", fontSize = 11.sp)
+                                            }
+                                        }
                                     }
                                 }
                             }

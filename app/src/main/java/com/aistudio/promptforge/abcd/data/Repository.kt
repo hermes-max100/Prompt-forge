@@ -79,8 +79,57 @@ class PromptRepository(
 
     // Saved Prompts
     fun getSavedPrompts(): Flow<List<SavedPrompt>> = dao.getAllSavedPrompts()
+    fun searchSavedPrompts(query: String): Flow<List<SavedPrompt>> = dao.searchSavedPrompts(query)
     suspend fun insertSavedPrompt(prompt: SavedPrompt) = dao.insertSavedPrompt(prompt)
     suspend fun deleteSavedPrompt(id: String) = dao.deleteSavedPrompt(id)
+
+    // Favorites
+    fun getFavoritePromptIds(): Flow<List<String>> = dao.getAllFavoritePromptIds()
+    suspend fun toggleFavorite(promptId: String): Boolean {
+        return if (dao.isFavorite(promptId)) {
+            dao.deleteFavorite(promptId)
+            false
+        } else {
+            dao.insertFavorite(FavoritePrompt(promptId))
+            true
+        }
+    }
+    suspend fun isFavorite(promptId: String): Boolean = dao.isFavorite(promptId)
+
+    // Prompt Stats
+    fun getAllPromptStats(): Flow<List<PromptStat>> = dao.getAllPromptStats()
+    suspend fun recordPromptExecution(promptId: String, latencyMs: Long) {
+        val current = dao.getPromptStat(promptId) ?: PromptStat(promptId)
+        dao.insertOrUpdatePromptStat(
+            current.copy(
+                executionCount = current.executionCount + 1,
+                lastLatencyMs = latencyMs,
+                lastUsedAt = System.currentTimeMillis()
+            )
+        )
+    }
+    suspend fun recordPromptCopy(promptId: String) {
+        val current = dao.getPromptStat(promptId) ?: PromptStat(promptId)
+        dao.insertOrUpdatePromptStat(
+            current.copy(
+                copyCount = current.copyCount + 1,
+                lastUsedAt = System.currentTimeMillis()
+            )
+        )
+    }
+    suspend fun recordPromptShare(promptId: String) {
+        val current = dao.getPromptStat(promptId) ?: PromptStat(promptId)
+        dao.insertOrUpdatePromptStat(
+            current.copy(
+                shareCount = current.shareCount + 1,
+                lastUsedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    fun setCustomApiKey(key: String) {
+        apiService.setCustomKey(key)
+    }
 
     // Playground Runs
     fun getPlaygroundRuns(): Flow<List<PlaygroundRun>> = dao.getAllPlaygroundRuns()

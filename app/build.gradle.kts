@@ -72,4 +72,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
+
+    testImplementation(libs.junit)
 }

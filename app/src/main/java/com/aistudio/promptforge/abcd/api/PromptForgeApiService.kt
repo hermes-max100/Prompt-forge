@@ -27,12 +27,19 @@ data class ApiHealthStatus(
 class PromptForgeApiService(
     private val service: GeminiApiService = RetrofitClient.service
 ) {
+    @Volatile
+    var customApiKey: String = ""
+
     fun isApiKeyConfigured(): Boolean {
-        return BuildConfig.GEMINI_API_KEY.isNotBlank()
+        return BuildConfig.GEMINI_API_KEY.isNotBlank() || customApiKey.isNotBlank()
     }
 
     fun getActiveApiKey(): String {
-        return BuildConfig.GEMINI_API_KEY
+        return customApiKey.ifBlank { BuildConfig.GEMINI_API_KEY }
+    }
+
+    fun setCustomKey(key: String) {
+        customApiKey = key.trim()
     }
 
     suspend fun generateContent(
