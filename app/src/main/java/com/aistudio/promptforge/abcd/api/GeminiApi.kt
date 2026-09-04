@@ -74,14 +74,29 @@ data class GeminiErrorResponse(
     val error: GeminiErrorDetails? = null
 )
 
+object SupportedModels {
+    const val FLASH_LATEST = "gemini-flash-latest"
+    const val FLASH_3_5 = "gemini-3.5-flash"
+    const val PRO_3_1 = "gemini-3.1-pro-preview"
+
+    val ALL = listOf(FLASH_LATEST, FLASH_3_5, PRO_3_1)
+}
+
 interface GeminiApiService {
-    @POST("v1beta/models/gemini-2.5-flash:generateContent")
+    @POST("v1beta/models/{model}:generateContent")
+    suspend fun generateContentWithModel(
+        @retrofit2.http.Path("model") model: String,
+        @Query("key") apiKey: String,
+        @Body request: GenerateContentRequest
+    ): GenerateContentResponse
+
+    @POST("v1beta/models/gemini-flash-latest:generateContent")
     suspend fun generateContent(
         @Query("key") apiKey: String,
         @Body request: GenerateContentRequest
     ): GenerateContentResponse
 
-    @POST("v1beta/models/gemini-1.5-flash:generateContent")
+    @POST("v1beta/models/gemini-3.5-flash:generateContent")
     suspend fun generateContentFallback(
         @Query("key") apiKey: String,
         @Body request: GenerateContentRequest

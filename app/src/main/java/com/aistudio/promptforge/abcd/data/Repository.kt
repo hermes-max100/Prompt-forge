@@ -1,12 +1,17 @@
 package com.aistudio.promptforge.abcd.data
 
 import com.aistudio.promptforge.abcd.BuildConfig
+import com.aistudio.promptforge.abcd.api.ApiCallResult
+import com.aistudio.promptforge.abcd.api.ApiHealthStatus
 import com.aistudio.promptforge.abcd.api.Content
 import com.aistudio.promptforge.abcd.api.GeminiErrorResponse
 import com.aistudio.promptforge.abcd.api.GenerateContentRequest
 import com.aistudio.promptforge.abcd.api.GenerationConfig
 import com.aistudio.promptforge.abcd.api.Part
+import com.aistudio.promptforge.abcd.api.PromptForgeApiService
 import com.aistudio.promptforge.abcd.api.RetrofitClient
+import com.aistudio.promptforge.abcd.api.SupportedModels
+import com.aistudio.promptforge.abcd.model.AppError
 import com.aistudio.promptforge.abcd.model.AutoForgePackData
 import com.aistudio.promptforge.abcd.model.GeneratedMcp
 import com.aistudio.promptforge.abcd.model.GeneratedSkill
@@ -38,11 +43,24 @@ data class GenerationMetrics(
 }
 
 sealed class AiResult<out T> {
-    data class Success<out T>(val data: T, val metrics: GenerationMetrics) : AiResult<T>()
-    data class Error(val message: String, val code: Int? = null) : AiResult<Nothing>()
+    data class Success<out T>(
+        val data: T,
+        val metrics: GenerationMetrics,
+        val isFallback: Boolean = false,
+        val notice: AppError? = null
+    ) : AiResult<T>()
+
+    data class Error(
+        val message: String,
+        val code: Int? = null,
+        val appError: AppError? = null
+    ) : AiResult<Nothing>()
 }
 
-class PromptRepository(private val dao: PromptDao) {
+class PromptRepository(
+    private val dao: PromptDao,
+    val apiService: PromptForgeApiService = PromptForgeApiService()
+) {
 
     // AutoForge Packs
     fun getAutoForgePacks(): Flow<List<AutoForgePack>> = dao.getAllAutoForgePacks()
@@ -79,21 +97,27 @@ class PromptRepository(private val dao: PromptDao) {
         }
     }
 
+    fun isApiKeyConfigured(): Boolean {
+        return apiService.isApiKeyConfigured()
+    }
+
+    suspend fun testApiHealth(model: String = SupportedModels.FLASH_LATEST): ApiHealthStatus {
+        return apiService.testConnection(model)
+    }
+
     suspend fun generateComplete(
         system: String?,
         user: String,
         temperature: Float = 0.4f,
-        maxTokens: Int = 1500
+        maxTokens: Int = 1500,
+        model: String = SupportedModels.FLASH_LATEST
     ): AiResult<String> = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
         val startTime = System.currentTimeMillis()
-
         val promptCombined = if (!system.isNullOrBlank()) "$system\n$user" else user
         val promptWords = promptCombined.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }.size
         val promptChars = promptCombined.length
 
-        if (apiKey.isEmpty()) {
-            // Local high-speed synthesis fallback
+        if (!apiService.isApiKeyConfigured()) {
             val fallbackText = AutoForgeEngine.generateLocalPrompt10OutOf10(user)
             val latency = System.currentTimeMillis() - startTime
             val outTokens = estimateTokenCount(fallbackText)
@@ -110,36 +134,25 @@ class PromptRepository(private val dao: PromptDao) {
                     promptWords = promptWords,
                     outputChars = fallbackText.length,
                     outputWords = fallbackText.trim().split("\\s+".toRegex()).size
-                )
+                ),
+                isFallback = true,
+                notice = AppError.apiKeyMissing()
             )
         }
 
-        val sysContent = if (!system.isNullOrBlank()) {
-            Content(parts = listOf(Part(text = system)))
-        } else null
-
-        val request = GenerateContentRequest(
-            contents = listOf(Content(parts = listOf(Part(text = user)))),
-            generationConfig = GenerationConfig(temperature = temperature, maxOutputTokens = maxTokens),
-            systemInstruction = sysContent
+        val apiResult = apiService.generateContent(
+            prompt = user,
+            systemInstruction = system,
+            model = model,
+            temperature = temperature,
+            maxTokens = maxTokens
         )
 
-        try {
-            val response = try {
-                RetrofitClient.service.generateContent(apiKey, request)
-            } catch (_: Exception) {
-                RetrofitClient.service.generateContentFallback(apiKey, request)
-            }
-            val latencyMs = System.currentTimeMillis() - startTime
-
-            val candidate = response.candidates?.firstOrNull()
-            if (candidate?.finishReason == "SAFETY" || response.promptFeedback?.blockReason != null) {
-                val reason = response.promptFeedback?.blockReason ?: candidate?.finishReason ?: "SAFETY"
-                return@withContext AiResult.Error("Generation blocked by safety filters ($reason).")
-            }
-
-            val text = candidate?.content?.parts?.firstOrNull()?.text
-            if (text != null) {
+        when (apiResult) {
+            is ApiCallResult.Success -> {
+                val response = apiResult.data
+                val candidate = response.candidates?.firstOrNull()
+                val text = candidate?.content?.parts?.firstOrNull()?.text ?: ""
                 val outputWords = text.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }.size
                 val outputChars = text.length
 
@@ -149,7 +162,7 @@ class PromptRepository(private val dao: PromptDao) {
                 val isEstimated = response.usageMetadata == null
 
                 val metrics = GenerationMetrics(
-                    latencyMs = latencyMs,
+                    latencyMs = apiResult.latencyMs,
                     promptTokens = promptTokens,
                     outputTokens = outputTokens,
                     totalTokens = totalTokens,
@@ -159,46 +172,35 @@ class PromptRepository(private val dao: PromptDao) {
                     outputChars = outputChars,
                     outputWords = outputWords
                 )
-                AiResult.Success(text, metrics)
-            } else {
-                AiResult.Error("Empty response received from Gemini.")
+                AiResult.Success(text, metrics, isFallback = false)
             }
-        } catch (e: HttpException) {
-            val errorBody = e.response()?.errorBody()?.string()
-            val parsedMessage = try {
-                if (!errorBody.isNullOrBlank()) {
-                    val parsed = RetrofitClient.json.decodeFromString<GeminiErrorResponse>(errorBody)
-                    parsed.error?.message
-                } else null
-            } catch (_: Exception) {
-                null
-            }
-            val message = parsedMessage ?: "HTTP ${e.code()}: ${e.message()}"
-            AiResult.Error(message, e.code())
-        } catch (e: Exception) {
-            // Local fallback on network error
-            val fallbackText = AutoForgeEngine.generateLocalPrompt10OutOf10(user)
-            val latency = System.currentTimeMillis() - startTime
-            val outTokens = estimateTokenCount(fallbackText)
-            val inTokens = estimateTokenCount(promptCombined)
-            AiResult.Success(
-                data = fallbackText,
-                metrics = GenerationMetrics(
-                    latencyMs = latency,
-                    promptTokens = inTokens,
-                    outputTokens = outTokens,
-                    totalTokens = inTokens + outTokens,
-                    isEstimated = true,
-                    promptChars = promptChars,
-                    promptWords = promptWords,
-                    outputChars = fallbackText.length,
-                    outputWords = fallbackText.trim().split("\\s+".toRegex()).size
+            is ApiCallResult.Failure -> {
+                // Return fallback synthesis so the user is never blocked, but surface the AppError
+                val fallbackText = AutoForgeEngine.generateLocalPrompt10OutOf10(user)
+                val latency = System.currentTimeMillis() - startTime
+                val outTokens = estimateTokenCount(fallbackText)
+                val inTokens = estimateTokenCount(promptCombined)
+                AiResult.Success(
+                    data = fallbackText,
+                    metrics = GenerationMetrics(
+                        latencyMs = latency,
+                        promptTokens = inTokens,
+                        outputTokens = outTokens,
+                        totalTokens = inTokens + outTokens,
+                        isEstimated = true,
+                        promptChars = promptChars,
+                        promptWords = promptWords,
+                        outputChars = fallbackText.length,
+                        outputWords = fallbackText.trim().split("\\s+".toRegex()).size
+                    ),
+                    isFallback = true,
+                    notice = apiResult.error
                 )
-            )
+            }
         }
     }
 
-    suspend fun synthesize10OutOf10Prompt(goal: String): AiResult<String> {
+    suspend fun synthesize10OutOf10Prompt(goal: String, model: String = SupportedModels.FLASH_LATEST): AiResult<String> {
         val systemPrompt = """
 You are AutoForge's Master Prompt Synthesizer.
 Your mission is to take ANY broad, generic, or brief goal and engineer a flawless, comprehensive "10 out of 10" production prompt.
@@ -216,13 +218,17 @@ Return ONLY the assembled 10/10 Prompt without conversational preamble.
             system = systemPrompt,
             user = "Goal/Task Intent: $goal",
             temperature = 0.3f,
-            maxTokens = 1400
+            maxTokens = 1400,
+            model = model
         )
     }
 
-    suspend fun synthesizeSkillsForGoal(goal: String, prompt: String): List<GeneratedSkill> {
-        val apiKey = BuildConfig.GEMINI_API_KEY
-        if (apiKey.isBlank()) {
+    suspend fun synthesizeSkillsForGoal(
+        goal: String,
+        prompt: String,
+        model: String = SupportedModels.FLASH_LATEST
+    ): List<GeneratedSkill> {
+        if (!isApiKeyConfigured()) {
             return AutoForgeEngine.generateLocalSkills(goal)
         }
 

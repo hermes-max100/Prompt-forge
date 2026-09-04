@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
@@ -95,6 +96,8 @@ import com.aistudio.promptforge.abcd.model.GoalPreset
 import com.aistudio.promptforge.abcd.ui.EngineStage
 import com.aistudio.promptforge.abcd.ui.MainViewModel
 import com.aistudio.promptforge.abcd.ui.Screen
+import com.aistudio.promptforge.abcd.ui.components.ApiDiagnosticsDialog
+import com.aistudio.promptforge.abcd.ui.components.ErrorBanner
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,10 +110,19 @@ fun EngineScreen(
     val isRunning by viewModel.isEngineRunning.collectAsState()
     val activePack by viewModel.activePack.collectAsState()
     val engineLogs by viewModel.engineLogs.collectAsState()
+    val currentError by viewModel.currentError.collectAsState()
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     var selectedInspectTab by remember { mutableIntStateOf(0) }
+    var showDiagnosticsDialog by remember { mutableStateOf(false) }
+
+    if (showDiagnosticsDialog) {
+        ApiDiagnosticsDialog(
+            viewModel = viewModel,
+            onDismiss = { showDiagnosticsDialog = false }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -150,6 +162,16 @@ fun EngineScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = { showDiagnosticsDialog = true },
+                        modifier = Modifier.testTag("engine_api_diagnostics_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.NetworkCheck,
+                            contentDescription = "API Status",
+                            tint = if (viewModel.isApiKeyConfigured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
                         onClick = { navController.navigate(Screen.Vault.route) },
                         modifier = Modifier.testTag("engine_open_vault_button")
                     ) {
@@ -175,14 +197,24 @@ fun EngineScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 32.dp)
         ) {
+            ErrorBanner(
+                error = currentError,
+                onDismiss = { viewModel.clearError() },
+                onRetry = { viewModel.retryLastAction() }
+            )
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
+            ) {
             // 1. Goal Engine Input Card
             item {
                 Card(
@@ -581,6 +613,7 @@ fun EngineScreen(
             }
         }
     }
+}
 }
 
 @Composable

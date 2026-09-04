@@ -3,6 +3,8 @@ package com.aistudio.promptforge.abcd.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.aistudio.promptforge.abcd.api.ApiHealthStatus
+import com.aistudio.promptforge.abcd.api.SupportedModels
 import com.aistudio.promptforge.abcd.data.AiResult
 import com.aistudio.promptforge.abcd.data.AutoForgeEngine
 import com.aistudio.promptforge.abcd.data.AutoForgePack
@@ -12,6 +14,7 @@ import com.aistudio.promptforge.abcd.data.PromptRepository
 import com.aistudio.promptforge.abcd.data.SavedMcp
 import com.aistudio.promptforge.abcd.data.SavedPrompt
 import com.aistudio.promptforge.abcd.data.SavedSkill
+import com.aistudio.promptforge.abcd.model.AppError
 import com.aistudio.promptforge.abcd.model.AutoForgePackData
 import com.aistudio.promptforge.abcd.model.GOAL_PRESETS
 import com.aistudio.promptforge.abcd.model.GeneratedMcp
@@ -123,6 +126,62 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
     val playgroundRuns: StateFlow<List<PlaygroundRun>> = repository.getPlaygroundRuns()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    // ==========================================
+    // 6. ERROR HANDLING & API SERVICE STATE
+    // ==========================================
+    private val _currentError = MutableStateFlow<AppError?>(null)
+    val currentError: StateFlow<AppError?> = _currentError.asStateFlow()
+
+    private val _apiHealthStatus = MutableStateFlow<ApiHealthStatus?>(null)
+    val apiHealthStatus: StateFlow<ApiHealthStatus?> = _apiHealthStatus.asStateFlow()
+
+    private val _selectedModel = MutableStateFlow(SupportedModels.FLASH_LATEST)
+    val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
+
+    private val _isTestingApi = MutableStateFlow(false)
+    val isTestingApi: StateFlow<Boolean> = _isTestingApi.asStateFlow()
+
+    val isApiKeyConfigured: Boolean get() = repository.isApiKeyConfigured()
+
+    private var lastAction: (() -> Unit)? = null
+
+    fun clearError() {
+        _currentError.value = null
+    }
+
+    fun setError(error: AppError) {
+        _currentError.value = error
+    }
+
+    fun setSelectedModel(model: String) {
+        _selectedModel.value = model
+    }
+
+    fun retryLastAction() {
+        val action = lastAction
+        _currentError.value = null
+        action?.invoke()
+    }
+
+    fun testApiConnection() {
+        _isTestingApi.value = true
+        viewModelScope.launch {
+            val status = repository.testApiHealth(_selectedModel.value)
+            _apiHealthStatus.value = status
+            _isTestingApi.value = false
+            if (!status.isHealthy && status.error != null) {
+                _currentError.value = status.error
+            }
+        }
+    }
+
+    fun loadSavedPromptIntoForge(prompt: SavedPrompt) {
+        _promptForgeGoal.value = prompt.title
+        _prompt10OutOf10.value = prompt.assembled
+        _promptFramework.value = prompt.frameworkId
+        _currentError.value = null
+    }
+
     init {
         // Pre-populate with initial goal sample
         _promptForgeGoal.value = _goalInput.value
@@ -146,8 +205,10 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
         val targetGoal = goal.trim().ifBlank { _goalInput.value }
         if (targetGoal.isBlank()) return
 
+        lastAction = { runAutoForgePipeline(targetGoal) }
         _isEngineRunning.value = true
         _engineLogs.value = emptyList()
+        _currentError.value = null
         val startTime = System.currentTimeMillis()
 
         viewModelScope.launch {
@@ -232,7 +293,9 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
             } catch (e: Exception) {
                 _engineStage.value = EngineStage.ERROR
                 _isEngineRunning.value = false
-                addLog("❌ [AutoForge Engine Error] ${e.message}")
+                val appErr = repository.apiService.classifyError(e)
+                _currentError.value = appErr
+                addLog("❌ [AutoForge Engine Error] ${appErr.title}: ${appErr.message}")
             }
         }
     }
@@ -312,18 +375,24 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
         val target = goal.trim().ifBlank { _promptForgeGoal.value }
         if (target.isBlank()) return
 
+        lastAction = { forge10OutOf10Prompt(target) }
         _isPromptBusy.value = true
+        _currentError.value = null
         viewModelScope.launch {
-            val res = repository.synthesize10OutOf10Prompt(target)
+            val res = repository.synthesize10OutOf10Prompt(target, _selectedModel.value)
             _isPromptBusy.value = false
             when (res) {
                 is AiResult.Success -> {
                     _prompt10OutOf10.value = res.data
                     _promptMetrics.value = res.metrics
+                    if (res.notice != null) {
+                        _currentError.value = res.notice
+                    }
                 }
                 is AiResult.Error -> {
                     val fallback = AutoForgeEngine.generateLocalPrompt10OutOf10(target)
                     _prompt10OutOf10.value = fallback
+                    _currentError.value = res.appError ?: AppError.generic(res.message)
                 }
             }
         }
@@ -357,15 +426,24 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
         val target = query.trim().ifBlank { _skillForgeQuery.value }
         if (target.isBlank()) return
 
+        lastAction = { scourAndCodeSkills(target) }
         _isSkillBusy.value = true
+        _currentError.value = null
         _skillScourStatus.value = "Scouring GitHub skill registries, X.com, and Reddit forums..."
         viewModelScope.launch {
-            delay(500)
-            _skillScourStatus.value = "Coding custom Python/TypeScript skill implementation..."
-            val skills = repository.synthesizeSkillsForGoal(target, "")
-            _currentSkills.value = skills
-            _isSkillBusy.value = false
-            _skillScourStatus.value = "Synthesized ${skills.size} skills for \"$target\""
+            try {
+                delay(500)
+                _skillScourStatus.value = "Coding custom Python/TypeScript skill implementation..."
+                val skills = repository.synthesizeSkillsForGoal(target, "", _selectedModel.value)
+                _currentSkills.value = skills
+                _isSkillBusy.value = false
+                _skillScourStatus.value = "Synthesized ${skills.size} skills for \"$target\""
+            } catch (e: Exception) {
+                _isSkillBusy.value = false
+                val err = repository.apiService.classifyError(e)
+                _currentError.value = err
+                _skillScourStatus.value = "Skill synthesis error: ${err.message}"
+            }
         }
     }
 
@@ -399,12 +477,20 @@ class MainViewModel(private val repository: PromptRepository) : ViewModel() {
         val target = query.trim().ifBlank { _mcpForgeQuery.value }
         if (target.isBlank()) return
 
+        lastAction = { synthesizeMcps(target) }
         _isMcpBusy.value = true
+        _currentError.value = null
         viewModelScope.launch {
-            delay(500)
-            val mcps = repository.synthesizeMcpsForGoal(target, _currentSkills.value)
-            _currentMcps.value = mcps
-            _isMcpBusy.value = false
+            try {
+                delay(500)
+                val mcps = repository.synthesizeMcpsForGoal(target, _currentSkills.value)
+                _currentMcps.value = mcps
+                _isMcpBusy.value = false
+            } catch (e: Exception) {
+                _isMcpBusy.value = false
+                val err = repository.apiService.classifyError(e)
+                _currentError.value = err
+            }
         }
     }
 

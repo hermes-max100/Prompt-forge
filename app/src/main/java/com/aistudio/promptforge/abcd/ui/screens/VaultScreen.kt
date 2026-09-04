@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -29,14 +31,18 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -82,6 +88,8 @@ fun VaultScreen(
     val savedPrompts by viewModel.savedPrompts.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Goal Packs, 1: Prompts, 2: Skills, 3: MCPs
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("All") }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
@@ -152,30 +160,113 @@ fun VaultScreen(
                 tabs.forEachIndexed { i, title ->
                     Tab(
                         selected = selectedTab == i,
-                        onClick = { selectedTab = i },
+                        onClick = {
+                            selectedTab = i
+                            selectedCategory = "All"
+                        },
                         text = { Text(title, fontSize = 11.sp, maxLines = 1) }
                     )
                 }
             }
 
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .testTag("vault_search_input"),
+                placeholder = {
+                    Text(
+                        when (selectedTab) {
+                            0 -> "Search goal packs by goal, spec, or task type..."
+                            1 -> "Search prompts by title, framework, or content..."
+                            2 -> "Search skills by title, trigger, or language..."
+                            3 -> "Search MCPs by name, tools, or description..."
+                            else -> "Search vault..."
+                        },
+                        fontSize = 13.sp
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // Category Filter Chips
+            val categories = when (selectedTab) {
+                0 -> listOf("All", "Full-Stack", "Mobile", "DevOps & Agent", "Data & AI")
+                1 -> listOf("All", "CoT", "ReAct", "Role-Task", "Few-Shot", "System Prompt")
+                2 -> listOf("All", "System", "Scraper", "Analysis", "Orchestrator", "Code")
+                3 -> listOf("All", "Database", "API & Webhook", "Filesystem", "AI Tools", "Utilities")
+                else -> listOf("All")
+            }
+
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(categories) { cat ->
+                    FilterChip(
+                        selected = selectedCategory == cat,
+                        onClick = { selectedCategory = cat },
+                        label = { Text(cat, fontSize = 11.sp) },
+                        modifier = Modifier.testTag("category_chip_${cat.replace(" ", "_")}")
+                    )
+                }
+            }
+
+            // Filtered Items Lists
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 when (selectedTab) {
                     0 -> { // Goal Packs
-                        if (savedPacks.isEmpty()) {
+                        val filteredPacks = savedPacks.filter { pack ->
+                            val matchesSearch = searchQuery.isBlank() ||
+                                pack.goalTitle.contains(searchQuery, ignoreCase = true) ||
+                                pack.goalInput.contains(searchQuery, ignoreCase = true) ||
+                                pack.promptText.contains(searchQuery, ignoreCase = true) ||
+                                pack.taskType.contains(searchQuery, ignoreCase = true)
+                            val matchesCat = selectedCategory == "All" || when (selectedCategory) {
+                                "Full-Stack" -> pack.goalTitle.contains("full", true) || pack.goalInput.contains("web", true) || pack.taskType.contains("web", true)
+                                "Mobile" -> pack.goalTitle.contains("android", true) || pack.goalInput.contains("mobile", true) || pack.goalInput.contains("compose", true)
+                                "DevOps & Agent" -> pack.goalTitle.contains("devops", true) || pack.goalInput.contains("tool", true) || pack.goalInput.contains("pipeline", true)
+                                "Data & AI" -> pack.goalTitle.contains("data", true) || pack.goalInput.contains("ai", true) || pack.goalInput.contains("agent", true)
+                                else -> true
+                            }
+                            matchesSearch && matchesCat
+                        }
+
+                        if (filteredPacks.isEmpty()) {
                             item {
                                 EmptyVaultPlaceholder(
-                                    title = "No Saved Goal Packs",
-                                    subtitle = "Run AutoForge Engine to create and save complete autonomous goal packages."
+                                    title = if (searchQuery.isNotBlank() || selectedCategory != "All") "No Matching Goal Packs" else "No Saved Goal Packs",
+                                    subtitle = if (searchQuery.isNotBlank() || selectedCategory != "All") "Try clearing search filter or selecting 'All' category." else "Run AutoForge Engine to create and save complete autonomous goal packages."
                                 )
                             }
                         } else {
-                            items(savedPacks) { pack ->
+                            items(filteredPacks) { pack ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
@@ -197,6 +288,16 @@ fun VaultScreen(
                                                 )
                                             }
                                             Row {
+                                                IconButton(
+                                                    onClick = {
+                                                        val textToCopy = pack.promptText.ifBlank { pack.fullSpecMarkdown }
+                                                        clipboardManager.setText(AnnotatedString(textToCopy))
+                                                        Toast.makeText(context, "Goal pack prompt copied!", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.testTag("vault_copy_pack_button")
+                                                ) {
+                                                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy Prompt")
+                                                }
                                                 IconButton(onClick = {
                                                     viewModel.loadPackIntoEngine(pack)
                                                     navController.navigate("engine")
@@ -224,15 +325,30 @@ fun VaultScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = MaterialTheme.colorScheme.primaryContainer
-                                            ) {
-                                                Text(
-                                                    "Execution: ${pack.executionLatencyMs}ms",
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
-                                                )
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.primaryContainer
+                                                ) {
+                                                    Text(
+                                                        "Execution: ${pack.executionLatencyMs}ms",
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                                                    )
+                                                }
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                                ) {
+                                                    Text(
+                                                        pack.taskType.ifBlank { "Autonomous" },
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontSize = 10.sp,
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                        )
+                                                    )
+                                                }
                                             }
                                             Button(
                                                 onClick = { packDetailToView = pack },
@@ -247,15 +363,26 @@ fun VaultScreen(
                         }
                     }
                     1 -> { // Prompts
-                        if (savedPrompts.isEmpty()) {
+                        val filteredPrompts = savedPrompts.filter { prompt ->
+                            val matchesSearch = searchQuery.isBlank() ||
+                                prompt.title.contains(searchQuery, ignoreCase = true) ||
+                                prompt.assembled.contains(searchQuery, ignoreCase = true) ||
+                                prompt.frameworkId.contains(searchQuery, ignoreCase = true)
+                            val matchesCat = selectedCategory == "All" ||
+                                prompt.frameworkId.contains(selectedCategory, ignoreCase = true) ||
+                                prompt.title.contains(selectedCategory, ignoreCase = true)
+                            matchesSearch && matchesCat
+                        }
+
+                        if (filteredPrompts.isEmpty()) {
                             item {
                                 EmptyVaultPlaceholder(
-                                    title = "No Saved Prompts",
-                                    subtitle = "Forge 10/10 prompts in Prompt Forge and save them here."
+                                    title = if (searchQuery.isNotBlank() || selectedCategory != "All") "No Matching Prompts" else "No Saved Prompts",
+                                    subtitle = if (searchQuery.isNotBlank() || selectedCategory != "All") "Try adjusting your search query or framework category." else "Forge 10/10 prompts in Prompt Forge and save them here."
                                 )
                             }
                         } else {
-                            items(savedPrompts) { prompt ->
+                            items(filteredPrompts) { prompt ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
@@ -267,16 +394,30 @@ fun VaultScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                                 Icon(Icons.Filled.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                                 Spacer(Modifier.width(8.dp))
-                                                Text(prompt.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                                Text(prompt.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1)
+                                                Spacer(Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer
+                                                ) {
+                                                    Text(
+                                                        prompt.frameworkId.uppercase(),
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
                                             }
                                             Row {
-                                                IconButton(onClick = {
-                                                    clipboardManager.setText(AnnotatedString(prompt.assembled))
-                                                    Toast.makeText(context, "Prompt copied!", Toast.LENGTH_SHORT).show()
-                                                }) {
+                                                IconButton(
+                                                    onClick = {
+                                                        clipboardManager.setText(AnnotatedString(prompt.assembled))
+                                                        Toast.makeText(context, "Prompt copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.testTag("vault_copy_prompt_button")
+                                                ) {
                                                     Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
                                                 }
                                                 IconButton(onClick = { viewModel.deleteSavedPrompt(prompt.id) }) {
@@ -296,15 +437,27 @@ fun VaultScreen(
                         }
                     }
                     2 -> { // Skills
-                        if (savedSkills.isEmpty()) {
+                        val filteredSkills = savedSkills.filter { skill ->
+                            val matchesSearch = searchQuery.isBlank() ||
+                                skill.title.contains(searchQuery, ignoreCase = true) ||
+                                skill.description.contains(searchQuery, ignoreCase = true) ||
+                                skill.trigger.contains(searchQuery, ignoreCase = true) ||
+                                skill.implementationCode.contains(searchQuery, ignoreCase = true)
+                            val matchesCat = selectedCategory == "All" ||
+                                skill.category.contains(selectedCategory, ignoreCase = true) ||
+                                skill.title.contains(selectedCategory, ignoreCase = true)
+                            matchesSearch && matchesCat
+                        }
+
+                        if (filteredSkills.isEmpty()) {
                             item {
                                 EmptyVaultPlaceholder(
-                                    title = "No Saved Custom Skills",
-                                    subtitle = "Scour and code custom skills in Skill Forge and save them here."
+                                    title = if (searchQuery.isNotBlank() || selectedCategory != "All") "No Matching Skills" else "No Saved Custom Skills",
+                                    subtitle = if (searchQuery.isNotBlank() || selectedCategory != "All") "Try adjusting your search query or skill category." else "Scour and code custom skills in Skill Forge and save them here."
                                 )
                             }
                         } else {
-                            items(savedSkills) { skill ->
+                            items(filteredSkills) { skill ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
@@ -316,16 +469,30 @@ fun VaultScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                                 Icon(Icons.Filled.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
                                                 Spacer(Modifier.width(8.dp))
-                                                Text(skill.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                                Text(skill.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1)
+                                                Spacer(Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                                ) {
+                                                    Text(
+                                                        skill.category.ifBlank { "Skill" },
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
                                             }
                                             Row {
-                                                IconButton(onClick = {
-                                                    clipboardManager.setText(AnnotatedString(skill.implementationCode))
-                                                    Toast.makeText(context, "Skill code copied!", Toast.LENGTH_SHORT).show()
-                                                }) {
+                                                IconButton(
+                                                    onClick = {
+                                                        clipboardManager.setText(AnnotatedString(skill.implementationCode))
+                                                        Toast.makeText(context, "Skill code copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.testTag("vault_copy_skill_button")
+                                                ) {
                                                     Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
                                                 }
                                                 IconButton(onClick = { viewModel.deleteSavedSkill(skill.id) }) {
@@ -342,15 +509,27 @@ fun VaultScreen(
                         }
                     }
                     3 -> { // MCPs
-                        if (savedMcps.isEmpty()) {
+                        val filteredMcps = savedMcps.filter { mcp ->
+                            val matchesSearch = searchQuery.isBlank() ||
+                                mcp.name.contains(searchQuery, ignoreCase = true) ||
+                                mcp.description.contains(searchQuery, ignoreCase = true) ||
+                                mcp.category.contains(searchQuery, ignoreCase = true) ||
+                                mcp.mcpJsonConfig.contains(searchQuery, ignoreCase = true)
+                            val matchesCat = selectedCategory == "All" ||
+                                mcp.category.contains(selectedCategory, ignoreCase = true) ||
+                                mcp.name.contains(selectedCategory, ignoreCase = true)
+                            matchesSearch && matchesCat
+                        }
+
+                        if (filteredMcps.isEmpty()) {
                             item {
                                 EmptyVaultPlaceholder(
-                                    title = "No Saved MCPs",
-                                    subtitle = "Configure MCP servers and FastMCP tools in Plugin Forge and save them here."
+                                    title = if (searchQuery.isNotBlank() || selectedCategory != "All") "No Matching MCPs" else "No Saved MCPs",
+                                    subtitle = if (searchQuery.isNotBlank() || selectedCategory != "All") "Try adjusting your search query or MCP category." else "Configure MCP servers and FastMCP tools in Plugin Forge and save them here."
                                 )
                             }
                         } else {
-                            items(savedMcps) { mcp ->
+                            items(filteredMcps) { mcp ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
@@ -362,16 +541,30 @@ fun VaultScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                                 Icon(Icons.Filled.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(18.dp))
                                                 Spacer(Modifier.width(8.dp))
-                                                Text(mcp.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                                Text(mcp.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1)
+                                                Spacer(Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer
+                                                ) {
+                                                    Text(
+                                                        mcp.category.ifBlank { "Tool" },
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
                                             }
                                             Row {
-                                                IconButton(onClick = {
-                                                    clipboardManager.setText(AnnotatedString(mcp.mcpJsonConfig))
-                                                    Toast.makeText(context, "MCP config copied!", Toast.LENGTH_SHORT).show()
-                                                }) {
+                                                IconButton(
+                                                    onClick = {
+                                                        clipboardManager.setText(AnnotatedString(mcp.mcpJsonConfig))
+                                                        Toast.makeText(context, "MCP config copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.testTag("vault_copy_mcp_button")
+                                                ) {
                                                     Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
                                                 }
                                                 IconButton(onClick = { viewModel.deleteSavedMcp(mcp.id) }) {
@@ -413,12 +606,29 @@ fun VaultScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    clipboardManager.setText(AnnotatedString(pack.fullSpecMarkdown))
-                    Toast.makeText(context, "Copied Spec to Clipboard!", Toast.LENGTH_SHORT).show()
-                    packDetailToView = null
-                }) {
-                    Text("Copy Spec")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(pack.promptText.ifBlank { pack.fullSpecMarkdown }))
+                            Toast.makeText(context, "Prompt copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.testTag("dialog_copy_prompt_button")
+                    ) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Prompt", fontSize = 11.sp)
+                    }
+                    Button(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(pack.fullSpecMarkdown))
+                            Toast.makeText(context, "Full Spec copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.testTag("dialog_copy_spec_button")
+                    ) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Spec", fontSize = 11.sp)
+                    }
                 }
             },
             dismissButton = {

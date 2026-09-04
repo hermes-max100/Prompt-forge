@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Public
@@ -90,6 +91,8 @@ import com.aistudio.promptforge.abcd.model.GoalPreset
 import com.aistudio.promptforge.abcd.ui.EngineStage
 import com.aistudio.promptforge.abcd.ui.MainViewModel
 import com.aistudio.promptforge.abcd.ui.Screen
+import com.aistudio.promptforge.abcd.ui.components.ApiDiagnosticsDialog
+import com.aistudio.promptforge.abcd.ui.components.ErrorBanner
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -106,9 +109,18 @@ fun DashboardScreen(
     val savedPrompts by viewModel.savedPrompts.collectAsState()
     val savedSkills by viewModel.savedSkills.collectAsState()
     val savedMcps by viewModel.savedMcps.collectAsState()
+    val currentError by viewModel.currentError.collectAsState()
 
     var activeInputGoal by remember { mutableStateOf(goalInput) }
+    var showDiagnosticsDialog by remember { mutableStateOf(false) }
     val totalSavedCount = savedPacks.size + savedPrompts.size + savedSkills.size + savedMcps.size
+
+    if (showDiagnosticsDialog) {
+        ApiDiagnosticsDialog(
+            viewModel = viewModel,
+            onDismiss = { showDiagnosticsDialog = false }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -171,6 +183,16 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { showDiagnosticsDialog = true },
+                        modifier = Modifier.testTag("dashboard_api_diagnostics_button")
+                    ) {
+                        Icon(
+                            Icons.Filled.NetworkCheck,
+                            contentDescription = "API Status",
+                            tint = if (viewModel.isApiKeyConfigured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     // Agent Vault Action Button
                     BadgedBox(
                         badge = {
@@ -203,14 +225,24 @@ fun DashboardScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
         ) {
+            ErrorBanner(
+                error = currentError,
+                onDismiss = { viewModel.clearError() },
+                onRetry = { viewModel.retryLastAction() }
+            )
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
+            ) {
             // ----------------------------------------------------
             // 1. ENGINE STATUS & PIPELINE STATE BANNER
             // ----------------------------------------------------
@@ -855,11 +887,77 @@ fun DashboardScreen(
                                 }
                             }
                         }
+
+                        // Recent Saved Prompts Preview
+                        if (savedPrompts.isNotEmpty()) {
+                            val latestPrompt = savedPrompts.first()
+                            Spacer(Modifier.height(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                "Saved Prompt: ${latestPrompt.title}",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = MaterialTheme.colorScheme.primaryContainer
+                                            ) {
+                                                Text(
+                                                    latestPrompt.frameworkId.uppercase(),
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    ),
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            latestPrompt.assembled,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            viewModel.setPrompt10OutOf10(latestPrompt.assembled)
+                                            viewModel.setPromptForgeGoal(latestPrompt.title)
+                                            navController.navigate(Screen.PromptForge.route)
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        modifier = Modifier.height(34.dp)
+                                    ) {
+                                        Text("Open", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
 }
 
 @Composable
